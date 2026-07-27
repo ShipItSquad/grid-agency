@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import { services } from '$lib/data';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
@@ -19,8 +19,9 @@
 			}
 		}
 		if (!open && dialog.open) dialog.close();
-		return unlockPage;
 	});
+
+	onDestroy(unlockPage);
 
 	function lockPage() {
 		lockedScrollY = window.scrollY;
@@ -30,6 +31,7 @@
 	}
 
 	function unlockPage() {
+		if (typeof document === 'undefined') return;
 		const wasLocked = document.body.classList.contains('modal-open');
 		document.documentElement.classList.remove('modal-open');
 		document.body.classList.remove('modal-open');
@@ -48,6 +50,7 @@
 
 	function handleClose() {
 		open = false;
+		unlockPage();
 		const target = returnFocus;
 		returnFocus = null;
 		requestAnimationFrame(() => {
