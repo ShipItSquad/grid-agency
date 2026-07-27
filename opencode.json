@@ -1,0 +1,11 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	"mcp": {
+		"svelte-grab": {
+			"type": "local",
+			"command": ["pnpm", "exec", "svelte-grab-mcp", "--stdio"],
+			"enabled": true,
+			"timeout": 30000
+		}
+	}
+}

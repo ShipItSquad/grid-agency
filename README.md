@@ -24,6 +24,29 @@ pnpm lint
 pnpm build
 ```
 
+## Svelte Grab
+
+The project includes [svelte-grab](https://github.com/HeiCg/svelte-grab), a Svelte 5 development inspector that identifies the component and source location behind an element. It is enabled only while running the development server and is excluded from production builds.
+
+With `pnpm dev` running, use these shortcuts in the browser:
+
+- **Alt+Click** an element to capture its component and source line
+- **Alt+Shift+Click** to inspect component state and props
+- **Alt+Ctrl+Click** to inspect computed styles and their sources
+- **Alt+DoubleClick** to trace the component hierarchy
+- **Alt+RightClick** to audit an element for accessibility issues
+- **Alt+E** to inspect captured errors and warnings
+- **Alt+P** to profile component rendering
+
+The OpenCode MCP configuration in `opencode.json` connects Svelte Grab to the coding agent. Ask the agent to use `watch_for_grab`, then Alt+Click an element, enter an instruction in the overlay, and press **Cmd+Enter** (macOS) or **Ctrl+Enter** (Windows/Linux). The indicator is green while an agent is listening and red while disconnected.
+
+The agent receives the selected element, its component stack, exact source locations, and the instruction. For example:
+
+```text
+<button> in src/lib/components/Header.svelte:42
+User instruction: Make this button larger
+```
+
 ## Content structure
 
 Mock projects, journal posts, and services live in `src/lib/data.ts`. Shared site components are in `src/lib/components`, while each public URL has its own route under `src/routes`.
