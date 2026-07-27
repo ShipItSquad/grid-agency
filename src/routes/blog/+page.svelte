@@ -58,7 +58,7 @@
 	.posts article:hover {
 		padding-right: 1rem;
 		padding-left: 1rem;
-		background: #e8e5dc;
+		background: var(--surface);
 	}
 
 	.number,
@@ -103,16 +103,16 @@
 		height: 0.6rem;
 		border-radius: 50%;
 		background: var(--blue);
-		box-shadow: 0 0 0 0 rgba(49, 85, 245, 0.4);
+		box-shadow: 0 0 0 0 rgba(0, 112, 243, 0.4);
 		animation: pulse 2s infinite;
 	}
 
 	@keyframes pulse {
 		70% {
-			box-shadow: 0 0 0 8px rgba(49, 85, 245, 0);
+			box-shadow: 0 0 0 8px rgba(0, 112, 243, 0);
 		}
 		100% {
-			box-shadow: 0 0 0 0 rgba(49, 85, 245, 0);
+			box-shadow: 0 0 0 0 rgba(0, 112, 243, 0);
 		}
 	}
 

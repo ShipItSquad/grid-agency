@@ -61,7 +61,7 @@
 	}
 
 	dialog::backdrop {
-		background: rgba(18, 18, 16, 0.72);
+		background: rgba(0, 0, 0, 0.72);
 		backdrop-filter: blur(8px);
 	}
 

@@ -109,7 +109,7 @@
 		bottom: -17vw;
 		width: min(52vw, 700px);
 		aspect-ratio: 1;
-		border: 1px solid rgba(242, 240, 233, 0.7);
+		border: 1px solid rgba(255, 255, 255, 0.7);
 		border-radius: 50%;
 		animation: rotate 24s linear infinite;
 	}

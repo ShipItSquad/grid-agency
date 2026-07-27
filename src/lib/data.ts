@@ -48,42 +48,42 @@ export const projects: Project[] = [
 		category: 'Identity / Place',
 		year: '2026',
 		shape: 'orbit',
-		color: '#3155f5'
+		color: '#0070f3'
 	},
 	{
 		title: 'After Hours',
 		category: 'Campaign / Culture',
 		year: '2026',
 		shape: 'wave',
-		color: '#ee5b2b'
+		color: '#ffffff'
 	},
 	{
 		title: 'Field Notes',
 		category: 'Digital / Editorial',
 		year: '2025',
 		shape: 'grid',
-		color: '#c7d43d'
+		color: '#eaeaea'
 	},
 	{
 		title: 'Mono No. 4',
 		category: 'Type / Experiment',
 		year: '2025',
 		shape: 'type',
-		color: '#e8a6d8'
+		color: '#f2f2f2'
 	},
 	{
 		title: 'Open Assembly',
 		category: 'Strategy / Identity',
 		year: '2025',
 		shape: 'grid',
-		color: '#ffcb45'
+		color: '#d4d4d4'
 	},
 	{
 		title: 'New Rituals',
 		category: 'Digital / Commerce',
 		year: '2024',
 		shape: 'orbit',
-		color: '#7ecfbd'
+		color: '#666666'
 	}
 ];
 

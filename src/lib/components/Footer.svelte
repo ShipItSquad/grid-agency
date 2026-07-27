@@ -47,7 +47,7 @@
 		grid-template-columns: 2fr 1fr 1fr 1fr;
 		gap: 2rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid #55534d;
+		border-top: 1px solid var(--dark-line);
 		font-size: 0.7rem;
 		line-height: 1.6;
 		text-transform: uppercase;

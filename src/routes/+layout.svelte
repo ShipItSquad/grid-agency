@@ -11,7 +11,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<meta name="theme-color" content="#f2f0e9" />
+	<meta name="theme-color" content="#ffffff" />
 </svelte:head>
 
 <Header onServices={() => (servicesOpen = true)} />
