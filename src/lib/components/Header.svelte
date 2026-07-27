@@ -43,6 +43,7 @@
 		</button>
 	</nav>
 	<button
+		id="menu-toggle"
 		class="menu-button"
 		type="button"
 		aria-label="Toggle navigation"

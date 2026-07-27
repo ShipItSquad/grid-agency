@@ -32,6 +32,7 @@ body {
 	background: var(--paper);
 }
 
+body.modal-open,
 body:has(dialog[open]) {
 	overflow: hidden;
 }

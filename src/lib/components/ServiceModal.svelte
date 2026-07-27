@@ -9,12 +9,14 @@
 
 	$effect(() => {
 		if (!dialog) return;
+		document.body.classList.toggle('modal-open', open);
 		if (open && !dialog.open) {
 			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 			dialog.showModal();
 			void focusCloseButton();
 		}
 		if (!open && dialog.open) dialog.close();
+		return () => document.body.classList.remove('modal-open');
 	});
 
 	async function focusCloseButton() {
@@ -31,7 +33,7 @@
 		const target = returnFocus;
 		returnFocus = null;
 		requestAnimationFrame(() => {
-			const fallback = document.querySelector<HTMLElement>('[aria-label="Toggle navigation"]');
+			const fallback = document.querySelector<HTMLElement>('#menu-toggle');
 			(target?.getClientRects().length ? target : fallback)?.focus();
 		});
 	}
