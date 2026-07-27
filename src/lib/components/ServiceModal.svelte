@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { services } from '$lib/data';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
@@ -11,10 +12,15 @@
 		if (open && !dialog.open) {
 			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 			dialog.showModal();
-			closeButton?.focus();
+			void focusCloseButton();
 		}
 		if (!open && dialog.open) dialog.close();
 	});
+
+	async function focusCloseButton() {
+		await tick();
+		if (open && dialog.open) closeButton?.focus();
+	}
 
 	function close() {
 		open = false;
@@ -31,6 +37,7 @@
 <dialog
 	bind:this={dialog}
 	aria-labelledby="services-title"
+	aria-modal="true"
 	onclose={handleClose}
 	onclick={(event) => event.target === dialog && close()}
 >
