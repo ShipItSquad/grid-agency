@@ -38,6 +38,12 @@ In the GitHub repository, open **Settings → Pages** and set **Source** to **Gi
 
 For a user or organization Pages repository named `username.github.io`, change the workflow's `BASE_PATH` value to an empty string.
 
+## Cloudflare Pages previews
+
+The workflow at `.github/workflows/cloudflare-pages.yml` deploys `main` to `grid-agency.pages.dev` and each same-repository pull request to a branch preview such as `pr-42.grid-agency.pages.dev`.
+
+Add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as GitHub Actions repository secrets. The API token only needs **Account > Cloudflare Pages > Edit** access. Pull requests from forks are skipped because GitHub does not expose repository secrets to fork workflows.
+
 ## OpenCode GitHub automation
 
 The workflow at `.github/workflows/opencode.yml` enables every event type supported by the OpenCode GitHub integration:
