@@ -6,22 +6,36 @@
 	let dialog: HTMLDialogElement;
 	let closeButton: HTMLButtonElement | undefined;
 	let returnFocus: HTMLElement | null = null;
+	let lockedScrollY = 0;
 
 	$effect(() => {
 		if (!dialog) return;
-		document.documentElement.classList.toggle('modal-open', open);
-		document.body.classList.toggle('modal-open', open);
-		if (open && !dialog.open) {
-			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			dialog.showModal();
-			void focusCloseButton();
+		if (open) {
+			lockPage();
+			if (!dialog.open) {
+				returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+				dialog.showModal();
+				void focusCloseButton();
+			}
 		}
 		if (!open && dialog.open) dialog.close();
-		return () => {
-			document.documentElement.classList.remove('modal-open');
-			document.body.classList.remove('modal-open');
-		};
+		return unlockPage;
 	});
+
+	function lockPage() {
+		lockedScrollY = window.scrollY;
+		document.documentElement.classList.add('modal-open');
+		document.body.classList.add('modal-open');
+		document.body.style.top = `-${lockedScrollY}px`;
+	}
+
+	function unlockPage() {
+		const wasLocked = document.body.classList.contains('modal-open');
+		document.documentElement.classList.remove('modal-open');
+		document.body.classList.remove('modal-open');
+		document.body.style.removeProperty('top');
+		if (wasLocked) window.scrollTo(0, lockedScrollY);
+	}
 
 	async function focusCloseButton() {
 		await tick();
@@ -38,7 +52,8 @@
 		returnFocus = null;
 		requestAnimationFrame(() => {
 			const fallback = document.querySelector<HTMLElement>('#menu-toggle');
-			(target?.getClientRects().length ? target : fallback)?.focus();
+			const canRestore = target && target.tabIndex >= 0 && target.getClientRects().length > 0;
+			(canRestore ? target : fallback)?.focus();
 		});
 	}
 </script>
