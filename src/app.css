@@ -6,8 +6,8 @@
 	--blue: #0070f3;
 	--acid: #fafafa;
 	--surface: #f2f2f2;
-	--line: #eaeaea;
-	--dark-line: #333333;
+	--line: #8f8f8f;
+	--dark-line: #666666;
 	--page-pad: clamp(1rem, 3.2vw, 3.75rem);
 	--sans: 'DM Sans', Arial, sans-serif;
 	--display: 'Instrument Serif', Georgia, serif;

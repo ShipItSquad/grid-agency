@@ -55,7 +55,7 @@ export const projects: Project[] = [
 		category: 'Campaign / Culture',
 		year: '2026',
 		shape: 'wave',
-		color: '#ffffff'
+		color: '#fafafa'
 	},
 	{
 		title: 'Field Notes',
