@@ -3,6 +3,7 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"packageManager": "pnpm@11.5.3",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -27,6 +28,7 @@
 		"prettier-plugin-svelte": "^4.1.0",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
+		"svelte-grab": "^1.4.2",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.60.1",
 		"vite": "^8.0.16"
