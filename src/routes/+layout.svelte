@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
@@ -6,9 +7,13 @@
 	import Header from '$lib/components/Header.svelte';
 	import ServiceModal from '$lib/components/ServiceModal.svelte';
 
+	const homePath = resolve('/').replace(/\/$/, '') || '/';
 	let { children } = $props();
 	let servicesOpen = $state(false);
-	let themeColor = $derived(page.route.id === '/' ? '#0070f3' : '#ffffff');
+	let isHome = $derived(
+		page.route.id === '/' || (page.url.pathname.replace(/\/$/, '') || '/') === homePath
+	);
+	let themeColor = $derived(isHome ? '#0070f3' : '#ffffff');
 </script>
 
 <svelte:head>

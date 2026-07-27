@@ -4,7 +4,11 @@
 	let { project, index = 0 }: { project: Project; index?: number } = $props();
 </script>
 
-<div class="visual {project.shape}" style={`--project-color: ${project.color}`} aria-hidden="true">
+<div
+	class="visual {project.shape}"
+	style={`--project-color: ${project.artColor}`}
+	aria-hidden="true"
+>
 	{#if project.shape === 'orbit'}
 		<div class="planet"></div>
 		<div class="ring"></div>

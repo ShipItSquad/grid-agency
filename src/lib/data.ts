@@ -10,7 +10,7 @@ export type Project = {
 	category: string;
 	year: string;
 	shape: 'orbit' | 'grid' | 'wave' | 'type';
-	color: string;
+	artColor: string;
 };
 
 export type Post = {
@@ -48,42 +48,42 @@ export const projects: Project[] = [
 		category: 'Identity / Place',
 		year: '2026',
 		shape: 'orbit',
-		color: '#0070f3'
+		artColor: '#0070f3'
 	},
 	{
 		title: 'After Hours',
 		category: 'Campaign / Culture',
 		year: '2026',
 		shape: 'wave',
-		color: '#fafafa'
+		artColor: '#fafafa'
 	},
 	{
 		title: 'Field Notes',
 		category: 'Digital / Editorial',
 		year: '2025',
 		shape: 'grid',
-		color: '#eaeaea'
+		artColor: '#eaeaea'
 	},
 	{
 		title: 'Mono No. 4',
 		category: 'Type / Experiment',
 		year: '2025',
 		shape: 'type',
-		color: '#f2f2f2'
+		artColor: '#f2f2f2'
 	},
 	{
 		title: 'Open Assembly',
 		category: 'Strategy / Identity',
 		year: '2025',
 		shape: 'grid',
-		color: '#d4d4d4'
+		artColor: '#d4d4d4'
 	},
 	{
 		title: 'New Rituals',
 		category: 'Digital / Commerce',
 		year: '2024',
 		shape: 'orbit',
-		color: '#666666'
+		artColor: '#666666'
 	}
 ];
 

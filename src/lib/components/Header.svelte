@@ -101,9 +101,16 @@
 	}
 
 	nav a:hover::after,
+	nav a:focus-visible::after,
 	nav a.active::after {
 		transform: scaleX(1);
 		transform-origin: left;
+	}
+
+	.services-link:focus-visible,
+	.menu-button:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 3px;
 	}
 
 	.services-link {
