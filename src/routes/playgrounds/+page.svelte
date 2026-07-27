@@ -32,7 +32,7 @@
 </section>
 
 <section class="work-index">
-	<div class="filters" aria-label="Filter projects">
+	<div class="filters" role="group" aria-label="Filter projects">
 		{#each filters as filter (filter)}
 			<button
 				class:active={activeFilter === filter}

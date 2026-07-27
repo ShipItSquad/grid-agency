@@ -3,26 +3,50 @@
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
 	let dialog: HTMLDialogElement;
+	let closeButton: HTMLButtonElement;
+	let returnFocus: HTMLElement | null = null;
 
 	$effect(() => {
 		if (!dialog) return;
-		if (open && !dialog.open) dialog.showModal();
+		if (open && !dialog.open) {
+			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+			dialog.showModal();
+			closeButton.focus();
+		}
 		if (!open && dialog.open) dialog.close();
 	});
 
 	function close() {
 		open = false;
 	}
+
+	function handleClose() {
+		open = false;
+		const target = returnFocus;
+		returnFocus = null;
+		requestAnimationFrame(() => target?.focus());
+	}
 </script>
 
-<dialog bind:this={dialog} onclose={close} onclick={(event) => event.target === dialog && close()}>
+<dialog
+	bind:this={dialog}
+	aria-labelledby="services-title"
+	onclose={handleClose}
+	onclick={(event) => event.target === dialog && close()}
+>
 	<div class="modal-card">
 		<div class="modal-head">
 			<div>
 				<p class="eyebrow">How we can help</p>
-				<h2>Services, without<br />the mystery.</h2>
+				<h2 id="services-title">Services, without<br />the mystery.</h2>
 			</div>
-			<button class="close" type="button" onclick={close} aria-label="Close services">Close</button>
+			<button
+				bind:this={closeButton}
+				class="close"
+				type="button"
+				onclick={close}
+				aria-label="Close services">Close</button
+			>
 		</div>
 
 		<div class="service-list">

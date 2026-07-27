@@ -10,6 +10,7 @@ export type Project = {
 	category: string;
 	year: string;
 	shape: 'orbit' | 'grid' | 'wave' | 'type';
+	// Artwork input for ProjectVisual, not a reusable UI surface token.
 	artColor: string;
 };
 
