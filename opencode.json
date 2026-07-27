@@ -4,7 +4,7 @@
 		"svelte-grab": {
 			"type": "local",
 			"command": ["pnpm", "exec", "svelte-grab-mcp", "--stdio"],
-			"enabled": true,
+			"enabled": false,
 			"timeout": 30000
 		}
 	}

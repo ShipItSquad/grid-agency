@@ -38,7 +38,14 @@ With `pnpm dev` running, use these shortcuts in the browser:
 - **Alt+E** to inspect captured errors and warnings
 - **Alt+P** to profile component rendering
 
-The OpenCode MCP configuration in `opencode.json` connects Svelte Grab to the coding agent. Ask the agent to use `watch_for_grab`, then Alt+Click an element, enter an instruction in the overlay, and press **Cmd+Enter** (macOS) or **Ctrl+Enter** (Windows/Linux). The indicator is green while an agent is listening and red while disconnected.
+The inspector loads with the development server, but its MCP bridge is opt-in. To connect it to OpenCode:
+
+1. Set `PUBLIC_ENABLE_SVELTE_GRAB_MCP=true` when starting the app: `PUBLIC_ENABLE_SVELTE_GRAB_MCP=true pnpm dev`.
+2. Change the Svelte Grab entry in `opencode.json` to `"enabled": true`, then restart OpenCode.
+3. Ask the agent to use `watch_for_grab`.
+4. Alt+Click an element, enter an instruction in the overlay, and press **Cmd+Enter** (macOS) or **Ctrl+Enter** (Windows/Linux).
+
+The indicator is green while an agent is listening and red while disconnected. Keep the development server bound to localhost when MCP is enabled; do not expose it to an untrusted network.
 
 The agent receives the selected element, its component stack, exact source locations, and the instruction. For example:
 
