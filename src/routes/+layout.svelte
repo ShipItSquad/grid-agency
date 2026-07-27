@@ -17,13 +17,20 @@
 		page.route.id === '/' || (page.url.pathname.replace(/\/$/, '') || '/') === homePath
 	);
 	let themeColor = $derived(isHome ? '#0070f3' : '#ffffff');
-	const enableSvelteGrabMcp = import.meta.env.PUBLIC_ENABLE_SVELTE_GRAB_MCP === 'true';
+	const enableSvelteGrabMcp =
+		import.meta.env.PUBLIC_ENABLE_SVELTE_GRAB_MCP === 'true' &&
+		typeof location !== 'undefined' &&
+		['localhost', '127.0.0.1', '::1'].includes(location.hostname);
 
 	onMount(() => {
 		if (import.meta.env.DEV) {
-			void import('svelte-grab').then((module) => {
-				SvelteDevKit = module.SvelteDevKit;
-			});
+			void import('svelte-grab')
+				.then((module) => {
+					SvelteDevKit = module.SvelteDevKit;
+				})
+				.catch((error) => {
+					console.warn('Failed to load svelte-grab', error);
+				});
 		}
 	});
 </script>

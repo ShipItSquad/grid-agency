@@ -45,7 +45,7 @@ The inspector loads with the development server, but its MCP bridge is opt-in. T
 3. Ask the agent to use `watch_for_grab`.
 4. Alt+Click an element, enter an instruction in the overlay, and press **Cmd+Enter** (macOS) or **Ctrl+Enter** (Windows/Linux).
 
-The indicator is green while an agent is listening and red while disconnected. Keep the development server bound to localhost when MCP is enabled; do not expose it to an untrusted network.
+The indicator is green while an agent is listening and red while disconnected. The app only enables MCP on `localhost`, `127.0.0.1`, or `::1`; do not expose the MCP server to an untrusted network.
 
 The agent receives the selected element, its component stack, exact source locations, and the instruction. For example:
 
@@ -53,6 +53,8 @@ The agent receives the selected element, its component stack, exact source locat
 <button> in src/lib/components/Header.svelte:42
 User instruction: Make this button larger
 ```
+
+The production build fails if a generated asset contains Svelte Grab code, preserving the development-only guarantee. Run `pnpm audit` periodically when upgrading the inspector or MCP SDK; these development dependencies add a larger server-side dependency graph than the application itself.
 
 ## Content structure
 
