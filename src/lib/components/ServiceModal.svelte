@@ -9,6 +9,7 @@
 
 	$effect(() => {
 		if (!dialog) return;
+		document.documentElement.classList.toggle('modal-open', open);
 		document.body.classList.toggle('modal-open', open);
 		if (open && !dialog.open) {
 			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -16,7 +17,10 @@
 			void focusCloseButton();
 		}
 		if (!open && dialog.open) dialog.close();
-		return () => document.body.classList.remove('modal-open');
+		return () => {
+			document.documentElement.classList.remove('modal-open');
+			document.body.classList.remove('modal-open');
+		};
 	});
 
 	async function focusCloseButton() {

@@ -5,13 +5,15 @@ export type Service = {
 	deliverables: string[];
 };
 
+export type HexColor = `#${string}`;
+
 export type Project = {
 	title: string;
 	category: string;
 	year: string;
 	shape: 'orbit' | 'grid' | 'wave' | 'type';
 	// Artwork input for ProjectVisual, not a reusable UI surface token.
-	artColor: string;
+	artColor: HexColor;
 };
 
 export type Post = {
