@@ -90,6 +90,11 @@
 		color: var(--paper);
 	}
 
+	.filters button:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
+	}
+
 	.projects {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);

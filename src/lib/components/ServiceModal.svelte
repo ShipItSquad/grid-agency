@@ -36,6 +36,7 @@
 
 <dialog
 	bind:this={dialog}
+	id="services-dialog"
 	aria-labelledby="services-title"
 	aria-modal="true"
 	onclose={handleClose}
@@ -52,8 +53,10 @@
 				class="close"
 				type="button"
 				onclick={close}
-				aria-label="Close services">Close</button
+				aria-label="Close services"
 			>
+				Close
+			</button>
 		</div>
 
 		<div class="service-list">

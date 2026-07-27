@@ -32,6 +32,8 @@
 		<button
 			class="services-link"
 			type="button"
+			aria-haspopup="dialog"
+			aria-controls="services-dialog"
 			onclick={() => {
 				onServices();
 				menuOpen = false;
