@@ -37,8 +37,10 @@
 			onclick={() => {
 				onServices();
 				menuOpen = false;
-			}}>Services</button
+			}}
 		>
+			Services
+		</button>
 	</nav>
 	<button
 		class="menu-button"

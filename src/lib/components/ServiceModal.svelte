@@ -30,7 +30,10 @@
 		open = false;
 		const target = returnFocus;
 		returnFocus = null;
-		requestAnimationFrame(() => target?.focus());
+		requestAnimationFrame(() => {
+			const fallback = document.querySelector<HTMLElement>('[aria-label="Toggle navigation"]');
+			(target?.getClientRects().length ? target : fallback)?.focus();
+		});
 	}
 </script>
 
@@ -130,6 +133,11 @@
 		font-weight: 800;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
+	}
+
+	.close:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 3px;
 	}
 
 	.service-list {
