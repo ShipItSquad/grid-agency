@@ -3,7 +3,7 @@
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
 	let dialog: HTMLDialogElement;
-	let closeButton: HTMLButtonElement;
+	let closeButton: HTMLButtonElement | undefined;
 	let returnFocus: HTMLElement | null = null;
 
 	$effect(() => {
@@ -11,7 +11,7 @@
 		if (open && !dialog.open) {
 			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 			dialog.showModal();
-			closeButton.focus();
+			closeButton?.focus();
 		}
 		if (!open && dialog.open) dialog.close();
 	});
