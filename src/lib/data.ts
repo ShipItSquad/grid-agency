@@ -5,12 +5,21 @@ export type Service = {
 	deliverables: string[];
 };
 
+declare const hexColorBrand: unique symbol;
+export type HexColor = string & { readonly [hexColorBrand]: true };
+
+function hexColor(value: string): HexColor {
+	if (!/^#[\da-f]{6}$/i.test(value)) throw new Error(`Invalid hex color: ${value}`);
+	return value as HexColor;
+}
+
 export type Project = {
 	title: string;
 	category: string;
 	year: string;
 	shape: 'orbit' | 'grid' | 'wave' | 'type';
-	color: string;
+	// Artwork input for ProjectVisual, not a reusable UI surface token.
+	artColor: HexColor;
 };
 
 export type Post = {
@@ -48,42 +57,42 @@ export const projects: Project[] = [
 		category: 'Identity / Place',
 		year: '2026',
 		shape: 'orbit',
-		color: '#3155f5'
+		artColor: hexColor('#0070f3')
 	},
 	{
 		title: 'After Hours',
 		category: 'Campaign / Culture',
 		year: '2026',
 		shape: 'wave',
-		color: '#ee5b2b'
+		artColor: hexColor('#fafafa')
 	},
 	{
 		title: 'Field Notes',
 		category: 'Digital / Editorial',
 		year: '2025',
 		shape: 'grid',
-		color: '#c7d43d'
+		artColor: hexColor('#eaeaea')
 	},
 	{
 		title: 'Mono No. 4',
 		category: 'Type / Experiment',
 		year: '2025',
 		shape: 'type',
-		color: '#e8a6d8'
+		artColor: hexColor('#f2f2f2')
 	},
 	{
 		title: 'Open Assembly',
 		category: 'Strategy / Identity',
 		year: '2025',
 		shape: 'grid',
-		color: '#ffcb45'
+		artColor: hexColor('#d4d4d4')
 	},
 	{
 		title: 'New Rituals',
 		category: 'Digital / Commerce',
 		year: '2024',
 		shape: 'orbit',
-		color: '#7ecfbd'
+		artColor: hexColor('#666666')
 	}
 ];
 

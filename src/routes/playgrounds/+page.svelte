@@ -32,7 +32,7 @@
 </section>
 
 <section class="work-index">
-	<div class="filters" aria-label="Filter projects">
+	<div class="filters" role="group" aria-label="Filter projects">
 		{#each filters as filter (filter)}
 			<button
 				class:active={activeFilter === filter}
@@ -88,6 +88,11 @@
 		border-color: var(--ink);
 		background: var(--ink);
 		color: var(--paper);
+	}
+
+	.filters button:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 2px;
 	}
 
 	.projects {

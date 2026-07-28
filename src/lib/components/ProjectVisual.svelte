@@ -2,9 +2,10 @@
 	import type { Project } from '$lib/data';
 
 	let { project, index = 0 }: { project: Project; index?: number } = $props();
+	let artColor = $derived(/^#[\da-f]{6}$/i.test(project.artColor) ? project.artColor : '#000000');
 </script>
 
-<div class="visual {project.shape}" style={`--project-color: ${project.color}`} aria-hidden="true">
+<div class="visual {project.shape}" style={`--project-color: ${artColor}`} aria-hidden="true">
 	{#if project.shape === 'orbit'}
 		<div class="planet"></div>
 		<div class="ring"></div>

@@ -35,7 +35,7 @@
 <section class="selected">
 	<div class="section-head">
 		<p class="eyebrow">Selected work</p>
-		<a href={resolve('/playgrounds')}>View all projects ↗</a>
+		<a href={resolve('/playgrounds')}>View all projects <span aria-hidden="true">↗</span></a>
 	</div>
 	<div class="project-grid">
 		{#each projects.slice(0, 4) as project, index (project.title)}
@@ -54,7 +54,7 @@
 <section class="journal">
 	<div class="section-head">
 		<p class="eyebrow">From the journal</p>
-		<a href={resolve('/blog')}>Read all notes ↗</a>
+		<a href={resolve('/blog')}>Read all notes <span aria-hidden="true">↗</span></a>
 	</div>
 	<div class="post-list">
 		{#each posts.slice(0, 2) as post, index (post.title)}
@@ -109,7 +109,7 @@
 		bottom: -17vw;
 		width: min(52vw, 700px);
 		aspect-ratio: 1;
-		border: 1px solid rgba(242, 240, 233, 0.7);
+		border: 1px solid rgba(255, 255, 255, 0.7);
 		border-radius: 50%;
 		animation: rotate 24s linear infinite;
 	}

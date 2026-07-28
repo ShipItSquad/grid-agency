@@ -1,28 +1,117 @@
 <script lang="ts">
+	import { onDestroy, tick } from 'svelte';
 	import { services } from '$lib/data';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
 	let dialog: HTMLDialogElement;
+	let closeButton: HTMLButtonElement | undefined;
+	let returnFocus: HTMLElement | null = null;
+	let lockedScrollY = 0;
 
 	$effect(() => {
 		if (!dialog) return;
-		if (open && !dialog.open) dialog.showModal();
-		if (!open && dialog.open) dialog.close();
+		if (open) {
+			lockPage();
+			if (!dialog.open) {
+				returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+				try {
+					dialog.showModal();
+					void focusCloseButton();
+				} catch {
+					open = false;
+					unlockPage();
+				}
+			}
+		}
+		if (!open) {
+			if (dialog.open) dialog.close();
+			else unlockPage();
+		}
 	});
+
+	onDestroy(unlockPage);
+
+	function lockPage() {
+		if (document.body.classList.contains('modal-open')) return;
+		lockedScrollY = window.scrollY;
+		document.documentElement.classList.add('modal-open');
+		document.body.classList.add('modal-open');
+		document.body.style.top = `-${lockedScrollY}px`;
+		document.addEventListener('touchmove', preventBackgroundTouch, { passive: false });
+	}
+
+	function unlockPage() {
+		if (typeof document === 'undefined') return;
+		const wasLocked = document.body.classList.contains('modal-open');
+		document.documentElement.classList.remove('modal-open');
+		document.body.classList.remove('modal-open');
+		document.body.style.removeProperty('top');
+		document.removeEventListener('touchmove', preventBackgroundTouch);
+		if (wasLocked) {
+			const scrollBehavior = document.documentElement.style.scrollBehavior;
+			document.documentElement.style.scrollBehavior = 'auto';
+			window.scrollTo(0, lockedScrollY);
+			document.documentElement.style.scrollBehavior = scrollBehavior;
+		}
+	}
+
+	function preventBackgroundTouch(event: TouchEvent) {
+		if (event.target instanceof Node && dialog.contains(event.target)) return;
+		event.preventDefault();
+	}
+
+	async function focusCloseButton() {
+		await tick();
+		if (open && dialog.open) closeButton?.focus();
+	}
 
 	function close() {
 		open = false;
 	}
+
+	function handleClose() {
+		open = false;
+		unlockPage();
+		const target = returnFocus;
+		returnFocus = null;
+		requestAnimationFrame(() => {
+			const candidates = [
+				target,
+				document.querySelector<HTMLElement>('#menu-toggle'),
+				document.querySelector<HTMLElement>('#home-link')
+			];
+			candidates
+				.find(
+					(candidate) => candidate && candidate.tabIndex >= 0 && candidate.getClientRects().length
+				)
+				?.focus({ preventScroll: true });
+		});
+	}
 </script>
 
-<dialog bind:this={dialog} onclose={close} onclick={(event) => event.target === dialog && close()}>
+<dialog
+	bind:this={dialog}
+	id="services-dialog"
+	aria-labelledby="services-title"
+	aria-describedby="services-description"
+	onclose={handleClose}
+	onclick={(event) => event.target === dialog && close()}
+>
 	<div class="modal-card">
 		<div class="modal-head">
 			<div>
 				<p class="eyebrow">How we can help</p>
-				<h2>Services, without<br />the mystery.</h2>
+				<h2 id="services-title">Services, without<br />the mystery.</h2>
 			</div>
-			<button class="close" type="button" onclick={close} aria-label="Close services">Close</button>
+			<button
+				bind:this={closeButton}
+				class="close"
+				type="button"
+				onclick={close}
+				aria-label="Close services"
+			>
+				Close
+			</button>
 		</div>
 
 		<div class="service-list">
@@ -43,7 +132,9 @@
 		</div>
 
 		<div class="modal-foot">
-			<p>This is a preview. Project enquiries will be enabled in the next release.</p>
+			<p id="services-description">
+				This is a preview. Project enquiries will be enabled in the next release.
+			</p>
 			<span>Available Q4 2026</span>
 		</div>
 	</div>
@@ -56,12 +147,15 @@
 		max-height: calc(100dvh - 2rem);
 		padding: 0;
 		border: 0;
+		overflow: auto;
+		overscroll-behavior: contain;
 		background: transparent;
 		color: var(--ink);
+		touch-action: pan-y;
 	}
 
 	dialog::backdrop {
-		background: rgba(18, 18, 16, 0.72);
+		background: rgba(0, 0, 0, 0.72);
 		backdrop-filter: blur(8px);
 	}
 
@@ -96,6 +190,11 @@
 		font-weight: 800;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
+	}
+
+	.close:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 3px;
 	}
 
 	.service-list {

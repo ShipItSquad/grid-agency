@@ -5,7 +5,7 @@
 <footer>
 	<div class="footer-lead">
 		<p class="eyebrow">Start somewhere interesting</p>
-		<a href="mailto:hello@offgrid.studio">hello@offgrid.studio <span>↗</span></a>
+		<a href="mailto:hello@offgrid.studio">hello@offgrid.studio <span aria-hidden="true">↗</span></a>
 	</div>
 	<div class="footer-meta">
 		<a class="brand" href={resolve('/')}>OFF/GRID</a>
@@ -47,7 +47,7 @@
 		grid-template-columns: 2fr 1fr 1fr 1fr;
 		gap: 2rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid #55534d;
+		border-top: 1px solid var(--line-on-dark);
 		font-size: 0.7rem;
 		line-height: 1.6;
 		text-transform: uppercase;

@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import type { RouteId } from '$app/types';
 
-	let { onServices }: { onServices: () => void } = $props();
+	let { onServices, servicesOpen }: { onServices: () => void; servicesOpen: boolean } = $props();
 	let menuOpen = $state(false);
 
 	const links: { href: RouteId; label: string }[] = [
@@ -18,8 +18,10 @@
 </script>
 
 <header class:menu-open={menuOpen}>
-	<a class="brand" href={resolve('/')} aria-label="Off Grid home">OFF<span>/</span>GRID</a>
-	<nav aria-label="Main navigation">
+	<a id="home-link" class="brand" href={resolve('/')} aria-label="Off Grid home"
+		>OFF<span>/</span>GRID</a
+	>
+	<nav id="main-navigation" aria-label="Main navigation">
 		{#each links as link (link.href)}
 			<a
 				class:active={isActive(link.href)}
@@ -32,17 +34,24 @@
 		<button
 			class="services-link"
 			type="button"
+			aria-haspopup="dialog"
+			aria-controls="services-dialog"
+			aria-expanded={servicesOpen}
 			onclick={() => {
 				onServices();
 				menuOpen = false;
-			}}>Services</button
+			}}
 		>
+			Services
+		</button>
 	</nav>
 	<button
+		id="menu-toggle"
 		class="menu-button"
 		type="button"
 		aria-label="Toggle navigation"
 		aria-expanded={menuOpen}
+		aria-controls="main-navigation"
 		onclick={() => (menuOpen = !menuOpen)}
 	>
 		<span></span><span></span>
@@ -101,9 +110,16 @@
 	}
 
 	nav a:hover::after,
+	nav a:focus-visible::after,
 	nav a.active::after {
 		transform: scaleX(1);
 		transform-origin: left;
+	}
+
+	.services-link:focus-visible,
+	.menu-button:focus-visible {
+		outline: 2px solid var(--blue);
+		outline-offset: 3px;
 	}
 
 	.services-link {
