@@ -74,16 +74,24 @@ In the GitHub repository, open **Settings → Pages** and set **Source** to **Gi
 
 For a user or organization Pages repository named `username.github.io`, change the workflow's `BASE_PATH` value to an empty string.
 
+## Cloudflare Pages previews
+
+The workflow at `.github/workflows/cloudflare-pages.yml` deploys `main` to `grid-agency.pages.dev` and each same-repository pull request to a branch preview such as `pr-42.grid-agency.pages.dev`.
+
+Add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as GitHub Actions repository secrets. The API token only needs **Account > Cloudflare Pages > Edit** access. Pull requests from forks are skipped because GitHub does not expose repository secrets to fork workflows.
+
 ## OpenCode GitHub automation
 
 The workflow at `.github/workflows/opencode.yml` enables every event type supported by the OpenCode GitHub integration:
 
 - `/oc` and `/opencode` commands in issue, pull request, and line-review comments
 - Automatic reviews when pull requests are opened or updated
-- Automatic triage when issues are opened or edited
+- Automatic implementation when actionable issues are opened or edited; code changes are proposed in a pull request
 - A maintenance task every Monday at 09:00 UTC
 - Manually prompted tasks from the Actions tab
 
 Before enabling the workflow, add `OPENAI_API_KEY` under **Settings > Secrets and variables > Actions > Secrets**. The workflow uses `openai/gpt-5.2` by default; set the optional `OPENCODE_MODEL` Actions variable to another `provider/model` value when needed, and add that provider's API-key secret to the workflow environment.
 
 The workflow uses GitHub's built-in `GITHUB_TOKEN` with job-specific permissions, so a personal access token is not required. Installing the [OpenCode GitHub App](https://github.com/apps/opencode-agent) is optional with this setup; install it instead if comments, commits, and pull requests should be attributed to the app.
+
+OpenCode runs in the GitHub Actions runner for these events, not in Daytona. Each run creates a temporary OpenCode session and links it from the issue comment. The project-level `opencode.json` starts agent-browser through `npx`, so the same browser tools are available in GitHub Actions, Daytona, and local OpenCode sessions without copying machine-specific paths or credentials. A Daytona workspace still needs Node.js and Chromium available; the browser tool can install Chromium when it is missing.

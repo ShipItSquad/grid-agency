@@ -4,3 +4,4 @@ packages:
 allowBuilds:
   agent-browser: true
   esbuild: true
+  workerd: true

@@ -1,0 +1,157 @@
+version: '3'
+
+tasks:
+  remote:init:
+    desc: Install the Daytona CLI when it is not already available
+    cmds:
+      - ./scripts/remote init
+
+  remote:login:
+    desc: Log in to Daytona using the browser or DAYTONA_API_KEY
+    cmds:
+      - ./scripts/remote login
+
+  remote:check:
+    desc: Check local dependencies for remote Daytona sessions
+    cmds:
+      - ./scripts/remote check
+
+  remote:start:
+    desc: Create a remote workspace (NAME=01 CONTEXT=pr:123)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_CONTEXT: '{{.CONTEXT}}'
+      REMOTE_PURPOSE: '{{.PURPOSE}}'
+      REMOTE_GIT_REF: '{{.GIT_REF}}'
+      REMOTE_REPO: '{{.REPO}}'
+      REMOTE_SNAPSHOT: '{{.SNAPSHOT}}'
+      REMOTE_TARGET: '{{.TARGET}}'
+      REMOTE_CPU: '{{.CPU}}'
+      REMOTE_MEMORY: '{{.MEMORY}}'
+      REMOTE_DISK: '{{.DISK}}'
+      REMOTE_AUTO_STOP: '{{.AUTO_STOP}}'
+      REMOTE_CLONE: '{{.CLONE}}'
+    cmds:
+      - ./scripts/remote start
+
+  remote:snapshot:
+    desc: Build a reusable Daytona snapshot from the devcontainer (SNAPSHOT=off-grid-dev)
+    env:
+      REMOTE_SNAPSHOT: '{{.SNAPSHOT}}'
+      REMOTE_DOCKERFILE: '{{.DOCKERFILE}}'
+      REMOTE_BUILD_CONTEXT: '{{.CONTEXT}}'
+      REMOTE_SNAPSHOT_CPU: '{{.CPU}}'
+      REMOTE_SNAPSHOT_MEMORY: '{{.MEMORY}}'
+      REMOTE_SNAPSHOT_DISK: '{{.DISK}}'
+      REMOTE_REGION: '{{.REGION}}'
+    cmds:
+      - ./scripts/remote snapshot
+
+  remote:list:
+    desc: List locally tracked remote workspaces and their Daytona state
+    cmds:
+      - ./scripts/remote list
+
+  remote:info:
+    desc: Show all locally stored and current Daytona information (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+    cmds:
+      - ./scripts/remote info
+
+  remote:ssh:
+    desc: Open an SSH session in a remote workspace (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+    cmds:
+      - ./scripts/remote ssh
+
+  remote:exec:
+    desc: Run a command in a remote workspace (NAME=01 CMD='pnpm check')
+    requires:
+      vars: [NAME, CMD]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_COMMAND: '{{.CMD}}'
+    cmds:
+      - ./scripts/remote exec
+
+  remote:serve:
+    desc: Start a background dev server and print its Daytona URL (NAME=01 PORT=5173)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_PORT: '{{.PORT}}'
+      REMOTE_COMMAND: '{{.CMD}}'
+      REMOTE_EXPIRES: '{{.EXPIRES}}'
+    cmds:
+      - ./scripts/remote serve
+
+  remote:url:
+    desc: Create and store a signed Daytona URL for a remote port (NAME=01 PORT=5173)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_PORT: '{{.PORT}}'
+      REMOTE_EXPIRES: '{{.EXPIRES}}'
+    cmds:
+      - ./scripts/remote url
+
+  remote:portless:
+    desc: Tunnel a remote port to a friendly local Portless URL (NAME=01 PORT=5173)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_PORT: '{{default "5173" .PORT}}'
+      REMOTE_LOCAL_PORT: '{{default "" .LOCAL_PORT}}'
+      REMOTE_PORTLESS_ALIAS: '{{default .NAME .ALIAS}}'
+      REMOTE_PORTLESS_PROXY_PORT: '{{default "1355" .PROXY_PORT}}'
+      REMOTE_SSH_EXPIRES_MINUTES: '{{default "1440" .EXPIRES_MINUTES}}'
+    cmds:
+      - ./scripts/remote portless
+
+  remote:portless:stop:
+    desc: Stop a session's local SSH tunnel and remove its Portless alias (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+    cmds:
+      - ./scripts/remote portless-stop
+
+  remote:stop:
+    desc: Stop a remote workspace without deleting its files (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+    cmds:
+      - ./scripts/remote stop
+
+  remote:resume:
+    desc: Resume a stopped remote workspace (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+    cmds:
+      - ./scripts/remote resume
+
+  remote:destroy:
+    desc: Delete a Daytona workspace and archive its local session metadata (NAME=01)
+    requires:
+      vars: [NAME]
+    prompt: This permanently deletes the Daytona sandbox. Continue?
+    env:
+      REMOTE_NAME: '{{.NAME}}'
+    cmds:
+      - ./scripts/remote destroy
