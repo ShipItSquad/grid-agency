@@ -3,7 +3,7 @@
 	"mcp": {
 		"agent_browser": {
 			"type": "local",
-			"command": ["npx", "-y", "agent-browser@0.33.0", "mcp", "--tools", "all"],
+			"command": ["pnpm", "exec", "agent-browser", "mcp", "--tools", "all"],
 			"enabled": true,
 			"timeout": 30000
 		},

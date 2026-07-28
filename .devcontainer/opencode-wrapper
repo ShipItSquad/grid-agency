@@ -1,2 +1,4 @@
 #!/bin/sh
-exec /usr/local/share/pnpm/bin/opencode "$@"
+PNPM_HOME="${PNPM_HOME:-/usr/local/share/pnpm}"
+export PNPM_HOME PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
+exec "$(pnpm bin --global)/opencode" "$@"

@@ -23,6 +23,9 @@ importers:
       '@types/node':
         specifier: ^24
         version: 24.13.3
+      agent-browser:
+        specifier: 0.33.0
+        version: 0.33.0
       eslint:
         specifier: ^10.4.1
         version: 10.8.0
@@ -384,6 +387,11 @@ packages:
   acorn@8.17.0:
     resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
     engines: {node: '>=0.4.0'}
+    hasBin: true
+
+  agent-browser@0.33.0:
+    resolution: {integrity: sha512-1N5asChiJ8VeqBa8vw/b7g/mw5qelWuowKB6/PNI8CRBLFtNPqgdmzRZyzbRJgajsoB9sBTC1ORpPmIay1ulzQ==}
+    engines: {node: '>=24.0.0', pnpm: '>=11.0.0'}
     hasBin: true
 
   ajv@6.15.0:
@@ -1325,6 +1333,8 @@ snapshots:
       acorn: 8.17.0
 
   acorn@8.17.0: {}
+
+  agent-browser@0.33.0: {}
 
   ajv@6.15.0:
     dependencies:

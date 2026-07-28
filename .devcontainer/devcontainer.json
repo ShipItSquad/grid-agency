@@ -6,7 +6,7 @@
 	"mounts": [
 		"source=off-grid-studio-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
 	],
-	"postCreateCommand": "sudo chown node:node node_modules && pnpm install --frozen-lockfile --store-dir node_modules/.pnpm-store",
+	"postCreateCommand": "sudo chown -R node:node node_modules && pnpm install --frozen-lockfile --store-dir node_modules/.pnpm-store",
 	"forwardPorts": [5173, 4723],
 	"portsAttributes": {
 		"5173": {
@@ -14,7 +14,7 @@
 			"onAutoForward": "openPreview"
 		},
 		"4723": {
-			"label": "svelte-grab MCP",
+			"label": "svelte-grab MCP HTTP bridge",
 			"onAutoForward": "silent"
 		}
 	},
