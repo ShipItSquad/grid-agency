@@ -9,7 +9,7 @@
 	let lockedScrollY = 0;
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {return;}
 		if (open) {
 			lockPage();
 			if (!dialog.open) {
@@ -24,15 +24,15 @@
 			}
 		}
 		if (!open) {
-			if (dialog.open) dialog.close();
-			else unlockPage();
+			if (dialog.open) {dialog.close();}
+			else {unlockPage();}
 		}
 	});
 
 	onDestroy(unlockPage);
 
 	function lockPage() {
-		if (document.body.classList.contains('modal-open')) return;
+		if (document.body.classList.contains('modal-open')) {return;}
 		lockedScrollY = window.scrollY;
 		document.documentElement.classList.add('modal-open');
 		document.body.classList.add('modal-open');
@@ -41,14 +41,14 @@
 	}
 
 	function unlockPage() {
-		if (typeof document === 'undefined') return;
+		if (typeof document === 'undefined') {return;}
 		const wasLocked = document.body.classList.contains('modal-open');
 		document.documentElement.classList.remove('modal-open');
 		document.body.classList.remove('modal-open');
 		document.body.style.removeProperty('top');
 		document.removeEventListener('touchmove', preventBackgroundTouch);
 		if (wasLocked) {
-			const scrollBehavior = document.documentElement.style.scrollBehavior;
+			const {scrollBehavior} = document.documentElement.style;
 			document.documentElement.style.scrollBehavior = 'auto';
 			window.scrollTo(0, lockedScrollY);
 			document.documentElement.style.scrollBehavior = scrollBehavior;
@@ -56,13 +56,13 @@
 	}
 
 	function preventBackgroundTouch(event: TouchEvent) {
-		if (event.target instanceof Node && dialog.contains(event.target)) return;
+		if (event.target instanceof Node && dialog.contains(event.target)) {return;}
 		event.preventDefault();
 	}
 
 	async function focusCloseButton() {
 		await tick();
-		if (open && dialog.open) closeButton?.focus();
+		if (open && dialog.open) {closeButton?.focus();}
 	}
 
 	function close() {

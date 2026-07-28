@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 tasks:
   remote:init:
@@ -21,31 +21,31 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
-      REMOTE_CONTEXT: '{{.CONTEXT}}'
-      REMOTE_PURPOSE: '{{.PURPOSE}}'
-      REMOTE_GIT_REF: '{{.GIT_REF}}'
-      REMOTE_REPO: '{{.REPO}}'
-      REMOTE_SNAPSHOT: '{{.SNAPSHOT}}'
-      REMOTE_TARGET: '{{.TARGET}}'
-      REMOTE_CPU: '{{.CPU}}'
-      REMOTE_MEMORY: '{{.MEMORY}}'
-      REMOTE_DISK: '{{.DISK}}'
-      REMOTE_AUTO_STOP: '{{.AUTO_STOP}}'
-      REMOTE_CLONE: '{{.CLONE}}'
+      REMOTE_NAME: "{{.NAME}}"
+      REMOTE_CONTEXT: "{{.CONTEXT}}"
+      REMOTE_PURPOSE: "{{.PURPOSE}}"
+      REMOTE_GIT_REF: "{{.GIT_REF}}"
+      REMOTE_REPO: "{{.REPO}}"
+      REMOTE_SNAPSHOT: "{{.SNAPSHOT}}"
+      REMOTE_TARGET: "{{.TARGET}}"
+      REMOTE_CPU: "{{.CPU}}"
+      REMOTE_MEMORY: "{{.MEMORY}}"
+      REMOTE_DISK: "{{.DISK}}"
+      REMOTE_AUTO_STOP: "{{.AUTO_STOP}}"
+      REMOTE_CLONE: "{{.CLONE}}"
     cmds:
       - ./scripts/remote start
 
   remote:snapshot:
     desc: Build a reusable Daytona snapshot from the devcontainer (SNAPSHOT=off-grid-dev)
     env:
-      REMOTE_SNAPSHOT: '{{.SNAPSHOT}}'
-      REMOTE_DOCKERFILE: '{{.DOCKERFILE}}'
-      REMOTE_BUILD_CONTEXT: '{{.CONTEXT}}'
-      REMOTE_SNAPSHOT_CPU: '{{.CPU}}'
-      REMOTE_SNAPSHOT_MEMORY: '{{.MEMORY}}'
-      REMOTE_SNAPSHOT_DISK: '{{.DISK}}'
-      REMOTE_REGION: '{{.REGION}}'
+      REMOTE_SNAPSHOT: "{{.SNAPSHOT}}"
+      REMOTE_DOCKERFILE: "{{.DOCKERFILE}}"
+      REMOTE_BUILD_CONTEXT: "{{.CONTEXT}}"
+      REMOTE_SNAPSHOT_CPU: "{{.CPU}}"
+      REMOTE_SNAPSHOT_MEMORY: "{{.MEMORY}}"
+      REMOTE_SNAPSHOT_DISK: "{{.DISK}}"
+      REMOTE_REGION: "{{.REGION}}"
     cmds:
       - ./scripts/remote snapshot
 
@@ -59,7 +59,7 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
     cmds:
       - ./scripts/remote info
 
@@ -68,7 +68,7 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
     cmds:
       - ./scripts/remote ssh
 
@@ -77,8 +77,8 @@ tasks:
     requires:
       vars: [NAME, CMD]
     env:
-      REMOTE_NAME: '{{.NAME}}'
-      REMOTE_COMMAND: '{{.CMD}}'
+      REMOTE_NAME: "{{.NAME}}"
+      REMOTE_COMMAND: "{{.CMD}}"
     cmds:
       - ./scripts/remote exec
 
@@ -87,10 +87,10 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
-      REMOTE_PORT: '{{.PORT}}'
-      REMOTE_COMMAND: '{{.CMD}}'
-      REMOTE_EXPIRES: '{{.EXPIRES}}'
+      REMOTE_NAME: "{{.NAME}}"
+      REMOTE_PORT: "{{.PORT}}"
+      REMOTE_COMMAND: "{{.CMD}}"
+      REMOTE_EXPIRES: "{{.EXPIRES}}"
     cmds:
       - ./scripts/remote serve
 
@@ -99,9 +99,9 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
-      REMOTE_PORT: '{{.PORT}}'
-      REMOTE_EXPIRES: '{{.EXPIRES}}'
+      REMOTE_NAME: "{{.NAME}}"
+      REMOTE_PORT: "{{.PORT}}"
+      REMOTE_EXPIRES: "{{.EXPIRES}}"
     cmds:
       - ./scripts/remote url
 
@@ -110,10 +110,10 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
       REMOTE_PORT: '{{default "5173" .PORT}}'
       REMOTE_LOCAL_PORT: '{{default "" .LOCAL_PORT}}'
-      REMOTE_PORTLESS_ALIAS: '{{default .NAME .ALIAS}}'
+      REMOTE_PORTLESS_ALIAS: "{{default .NAME .ALIAS}}"
       REMOTE_PORTLESS_PROXY_PORT: '{{default "1355" .PROXY_PORT}}'
       REMOTE_SSH_EXPIRES_MINUTES: '{{default "1440" .EXPIRES_MINUTES}}'
     cmds:
@@ -124,7 +124,7 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
     cmds:
       - ./scripts/remote portless-stop
 
@@ -133,7 +133,7 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
     cmds:
       - ./scripts/remote stop
 
@@ -142,7 +142,7 @@ tasks:
     requires:
       vars: [NAME]
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
     cmds:
       - ./scripts/remote resume
 
@@ -152,6 +152,6 @@ tasks:
       vars: [NAME]
     prompt: This permanently deletes the Daytona sandbox. Continue?
     env:
-      REMOTE_NAME: '{{.NAME}}'
+      REMOTE_NAME: "{{.NAME}}"
     cmds:
       - ./scripts/remote destroy

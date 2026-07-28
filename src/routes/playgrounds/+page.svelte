@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ProjectVisual from '$lib/components/ProjectVisual.svelte';
 	import { projects } from '$lib/data';
+
 	let activeFilter = $state('All');
 	const filters = ['All', 'Identity', 'Digital', 'Culture', 'Experiment'];
 	const visibleProjects = $derived(

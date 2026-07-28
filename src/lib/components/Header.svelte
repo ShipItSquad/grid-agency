@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import type { RouteId } from '$app/types';
 
-	let { onServices, servicesOpen }: { onServices: () => void; servicesOpen: boolean } = $props();
+	const { onServices, servicesOpen }: { onServices: () => void; servicesOpen: boolean } = $props();
 	let menuOpen = $state(false);
 
 	const links: { href: RouteId; label: string }[] = [

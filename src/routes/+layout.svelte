@@ -10,14 +10,14 @@
 	import ServiceModal from '$lib/components/ServiceModal.svelte';
 
 	const homePath = resolve('/').replace(/\/$/, '') || '/';
-	let { children } = $props();
+	const { children } = $props();
 	let SvelteDevKit = $state<typeof import('svelte-grab').SvelteDevKit>();
 	let enableSvelteGrabMcp = $state(false);
 	let servicesOpen = $state(false);
-	let isHome = $derived(
+	const isHome = $derived(
 		page.route.id === '/' || (page.url.pathname.replace(/\/$/, '') || '/') === homePath
 	);
-	let themeColor = $derived(isHome ? '#0070f3' : '#ffffff');
+	const themeColor = $derived(isHome ? '#0070f3' : '#ffffff');
 	onMount(() => {
 		if (import.meta.env.DEV) {
 			enableSvelteGrabMcp =
