@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { env } from '$env/dynamic/public';
 	import { onMount } from 'svelte';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
@@ -10,21 +11,25 @@
 
 	const homePath = resolve('/').replace(/\/$/, '') || '/';
 	let { children } = $props();
-	let SvelteDevKit = $state<null | typeof import('svelte-grab').SvelteDevKit>(null);
+	let SvelteDevKit = $state<typeof import('svelte-grab').SvelteDevKit>();
+	let enableSvelteGrabMcp = $state(false);
 	let servicesOpen = $state(false);
 	let isHome = $derived(
 		page.route.id === '/' || (page.url.pathname.replace(/\/$/, '') || '/') === homePath
 	);
 	let themeColor = $derived(isHome ? '#0070f3' : '#ffffff');
-
 	onMount(() => {
 		if (import.meta.env.DEV) {
+			enableSvelteGrabMcp =
+				env.PUBLIC_ENABLE_SVELTE_GRAB_MCP === 'true' &&
+				['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+
 			void import('svelte-grab')
-				.then(({ SvelteDevKit: DevKit }) => {
-					SvelteDevKit = DevKit;
+				.then((module) => {
+					SvelteDevKit = module.SvelteDevKit;
 				})
 				.catch((error) => {
-					console.warn('[svelte-grab] Failed to load development tools', error);
+					console.warn('Failed to load svelte-grab', error);
 				});
 		}
 	});
@@ -39,6 +44,6 @@
 <main>{@render children()}</main>
 <Footer />
 <ServiceModal bind:open={servicesOpen} />
-{#if SvelteDevKit}
-	<SvelteDevKit enableMcp />
+{#if import.meta.env.DEV && SvelteDevKit}
+	<SvelteDevKit enableMcp={enableSvelteGrabMcp} />
 {/if}

@@ -28,6 +28,38 @@ pnpm build
 
 The dev container includes Node 24, pnpm, OpenCode, and the project dependencies. Run `opencode` and `pnpm dev` in separate terminals. OpenCode launches Svelte Grab over stdio; that same process serves the browser context endpoint on port `4723`, which the container forwards so the development site can send element selections back to OpenCode.
 
+## Svelte Grab
+
+The project includes [svelte-grab](https://github.com/HeiCg/svelte-grab), a Svelte 5 development inspector that identifies the component and source location behind an element. It is enabled only while running the development server and is excluded from production builds.
+
+With `pnpm dev` running, use these shortcuts in the browser:
+
+- **Alt+Click** an element to capture its component and source line
+- **Alt+Shift+Click** to inspect component state and props
+- **Alt+Ctrl+Click** to inspect computed styles and their sources
+- **Alt+DoubleClick** to trace the component hierarchy
+- **Alt+RightClick** to audit an element for accessibility issues
+- **Alt+E** to inspect captured errors and warnings
+- **Alt+P** to profile component rendering
+
+The inspector loads with the development server, but its MCP bridge is opt-in. To connect it to OpenCode:
+
+1. Set `PUBLIC_ENABLE_SVELTE_GRAB_MCP=true` when starting the app: `PUBLIC_ENABLE_SVELTE_GRAB_MCP=true pnpm dev`.
+2. Change the Svelte Grab entry in `opencode.json` to `"enabled": true`, then restart OpenCode.
+3. Ask the agent to use `watch_for_grab`.
+4. Alt+Click an element, enter an instruction in the overlay, and press **Cmd+Enter** (macOS) or **Ctrl+Enter** (Windows/Linux).
+
+The indicator is green while an agent is listening and red while disconnected. The app only enables MCP on `localhost`, `127.0.0.1`, or `::1`; do not expose the MCP server to an untrusted network.
+
+The agent receives the selected element, its component stack, exact source locations, and the instruction. For example:
+
+```text
+<button> in src/lib/components/Header.svelte:42
+User instruction: Make this button larger
+```
+
+The production build fails if a generated asset contains Svelte Grab code, preserving the development-only guarantee. Run `pnpm audit` periodically when upgrading the inspector or MCP SDK; these development dependencies add a larger server-side dependency graph than the application itself.
+
 ## Content structure
 
 Mock projects, journal posts, and services live in `src/lib/data.ts`. Shared site components are in `src/lib/components`, while each public URL has its own route under `src/routes`.
