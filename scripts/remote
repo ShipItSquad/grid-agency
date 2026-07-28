@@ -1,0 +1,811 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SESSIONS_DIR="${REMOTE_SESSIONS_DIR:-$ROOT/.sessions}"
+COMMAND="${1:-help}"
+NAME="${REMOTE_NAME:-${2:-}}"
+
+die() {
+	printf 'remote: %s\n' "$*" >&2
+	exit 1
+}
+
+note() {
+	printf 'remote: %s\n' "$*"
+}
+
+need() {
+	command -v "$1" >/dev/null 2>&1 || die "missing '$1' ($2)"
+}
+
+validate_name() {
+	[[ -n "$NAME" ]] || die "NAME is required"
+	[[ "$NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] ||
+		die "NAME must match [a-zA-Z0-9][a-zA-Z0-9._-]*"
+}
+
+positive_integer() {
+	local label="$1" value="$2"
+	[[ "$value" =~ ^[1-9][0-9]*$ ]] || die "$label must be a positive integer"
+}
+
+nonnegative_integer() {
+	local label="$1" value="$2"
+	[[ "$value" =~ ^[0-9]+$ ]] || die "$label must be a non-negative integer"
+}
+
+session_dir() {
+	printf '%s/%s\n' "$SESSIONS_DIR" "$NAME"
+}
+
+session_file() {
+	printf '%s/session.json\n' "$(session_dir)"
+}
+
+require_session() {
+	validate_name
+	[[ -f "$(session_file)" ]] || die "session '$NAME' is not tracked; run 'task remote:list'"
+}
+
+sandbox_name_for() {
+	local repo_slug raw
+	repo_slug="$(basename "$ROOT")"
+	raw="${REMOTE_PREFIX:-$repo_slug}-$NAME"
+	printf '%s' "$raw" |
+		tr '[:upper:]_' '[:lower:]-' |
+		sed -E 's/[^a-z0-9.-]+/-/g; s/^-+//; s/-+$//' |
+		cut -c1-63
+}
+
+sandbox_name_from_session() {
+	jq -er '.sandbox.name' "$(session_file)"
+}
+
+daytona_config_file() {
+	if [[ -n "${DAYTONA_CONFIG_DIR:-}" ]]; then
+		printf '%s/config.json\n' "$DAYTONA_CONFIG_DIR"
+	elif [[ "$(uname -s)" == "Darwin" ]]; then
+		printf '%s/Library/Application Support/daytona/config.json\n' "$HOME"
+	else
+		printf '%s/.config/daytona/config.json\n' "$HOME"
+	fi
+}
+
+create_ssh_token() {
+	local sandbox="$1" expires_minutes="$2"
+	local config profile_id api_url api_key access_token organization_id response
+	config="$(daytona_config_file)"
+	[[ -f "$config" ]] || die "Daytona login configuration not found; run 'task remote:login'"
+
+	# Refresh a browser-login token before reading the CLI-owned config.
+	daytona list --format json >/dev/null
+
+	profile_id="$(jq -er '.activeProfile' "$config")"
+	api_url="$(jq -er --arg id "$profile_id" '.profiles[] | select(.id == $id) | .api.url' "$config")"
+	api_key="$(jq -r --arg id "$profile_id" '.profiles[] | select(.id == $id) | .api.key // empty' "$config")"
+
+	if [[ -n "$api_key" ]]; then
+		response="$(
+			curl -fsS -X POST \
+				"$api_url/sandbox/$sandbox/ssh-access?expiresInMinutes=$expires_minutes" \
+				-H "Authorization: Bearer $api_key"
+		)"
+	else
+		access_token="$(jq -er --arg id "$profile_id" '.profiles[] | select(.id == $id) | .api.token.accessToken' "$config")"
+		organization_id="$(jq -er --arg id "$profile_id" '.profiles[] | select(.id == $id) | .activeOrganizationId' "$config")"
+		response="$(
+			curl -fsS -X POST \
+				"$api_url/sandbox/$sandbox/ssh-access?expiresInMinutes=$expires_minutes" \
+				-H "Authorization: Bearer $access_token" \
+				-H "X-Daytona-Organization-ID: $organization_id"
+		)"
+	fi
+
+	printf '%s' "$response" | jq -er '.token'
+}
+
+context_parts() {
+	local context="${REMOTE_CONTEXT:-adhoc}"
+	if [[ "$context" == *:* ]]; then
+		CONTEXT_KIND="${context%%:*}"
+		CONTEXT_REF="${context#*:}"
+	else
+		CONTEXT_KIND="$context"
+		CONTEXT_REF=""
+	fi
+
+	case "$CONTEXT_KIND" in
+	issue | pr | branch | adhoc | task | spike | review) ;;
+	*) die "unsupported CONTEXT kind '$CONTEXT_KIND' (use issue, pr, branch, adhoc, task, spike, or review)" ;;
+	esac
+
+	if [[ "$CONTEXT_KIND" == "issue" || "$CONTEXT_KIND" == "pr" ]]; then
+		[[ "$CONTEXT_REF" =~ ^[0-9]+$ ]] ||
+			die "CONTEXT=$CONTEXT_KIND requires a numeric reference, for example $CONTEXT_KIND:123"
+	fi
+}
+
+github_https_url() {
+	local url="$1"
+	case "$url" in
+	git@github.com:*)
+		printf 'https://github.com/%s\n' "${url#git@github.com:}"
+		;;
+	ssh://git@github.com/*)
+		printf 'https://github.com/%s\n' "${url#ssh://git@github.com/}"
+		;;
+	*)
+		printf '%s\n' "$url"
+		;;
+	esac
+}
+
+github_context_url() {
+	local repo="$1" base="${repo%.git}"
+	case "$CONTEXT_KIND" in
+	issue) printf '%s/issues/%s\n' "$base" "$CONTEXT_REF" ;;
+	pr) printf '%s/pull/%s\n' "$base" "$CONTEXT_REF" ;;
+	branch) printf '%s/tree/%s\n' "$base" "$CONTEXT_REF" ;;
+	*) printf '\n' ;;
+	esac
+}
+
+write_session_helpers() {
+	local dir="$1"
+	cat >"$dir/ssh" <<EOF
+#!/usr/bin/env sh
+exec daytona ssh $(printf '%q' "$2") "\$@"
+EOF
+	chmod 700 "$dir/ssh"
+
+	cat >"$dir/exec" <<EOF
+#!/usr/bin/env sh
+exec daytona exec $(printf '%q' "$2") -- "\$@"
+EOF
+	chmod 700 "$dir/exec"
+}
+
+refresh_sandbox_info() {
+	local sandbox="$1" dir="$2"
+	if command -v daytona >/dev/null 2>&1; then
+		daytona info "$sandbox" --format json >"$dir/sandbox.json" 2>"$dir/daytona-info.log" || true
+	fi
+}
+
+update_local_state() {
+	local state="$1" file tmp
+	file="$(session_file)"
+	tmp="$(mktemp "${TMPDIR:-/tmp}/remote-session.XXXXXX")"
+	jq --arg state "$state" --arg now "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+		'.localState = $state | .updatedAt = $now' "$file" >"$tmp"
+	mv "$tmp" "$file"
+}
+
+bootstrap_git() {
+	local sandbox="$1" repo="$2" source_ref="$3"
+	local workspace="/workspace"
+
+	if daytona exec "$sandbox" -- test -d "$workspace/.git" >/dev/null 2>&1; then
+		return
+	fi
+
+	daytona exec "$sandbox" --timeout 0 -- git clone "$repo" "$workspace"
+
+	case "$CONTEXT_KIND" in
+	pr)
+		daytona exec "$sandbox" -- git -C "$workspace" fetch origin "pull/$CONTEXT_REF/head"
+		daytona exec "$sandbox" -- git -C "$workspace" checkout -B "remote/pr-$CONTEXT_REF" FETCH_HEAD
+		;;
+	branch)
+		daytona exec "$sandbox" -- git -C "$workspace" fetch origin "$CONTEXT_REF"
+		daytona exec "$sandbox" -- git -C "$workspace" checkout -B "$CONTEXT_REF" FETCH_HEAD
+		;;
+	issue)
+		daytona exec "$sandbox" -- git -C "$workspace" fetch origin "$source_ref"
+		daytona exec "$sandbox" -- git -C "$workspace" checkout --detach FETCH_HEAD
+		daytona exec "$sandbox" -- git -C "$workspace" checkout -B "remote/issue-$CONTEXT_REF"
+		;;
+	*)
+		daytona exec "$sandbox" -- git -C "$workspace" fetch origin "$source_ref"
+		daytona exec "$sandbox" -- git -C "$workspace" checkout --detach FETCH_HEAD
+		daytona exec "$sandbox" -- git -C "$workspace" checkout -B "remote/$NAME"
+		;;
+	esac
+}
+
+cmd_check() {
+	need git "install Git"
+	need jq "brew install jq"
+	need task "brew install go-task"
+	if ! command -v daytona >/dev/null 2>&1; then
+		printf '%s\n' \
+			"Daytona CLI is not installed." \
+			"Install: task remote:init" \
+			"Login:   task remote:login"
+		return 1
+	fi
+	daytona version
+	note "dependencies look good"
+}
+
+cmd_init() {
+	if command -v daytona >/dev/null 2>&1; then
+		note "Daytona CLI is already installed"
+		daytona version
+		return
+	fi
+
+	local os architecture download_url download_file
+	os="$(uname -s)"
+
+	case "$os" in
+	Darwin)
+		need brew "install Homebrew from https://brew.sh"
+		brew install daytonaio/cli/daytona
+		if brew help trust >/dev/null 2>&1; then
+			brew trust daytonaio/cli ||
+				note "warning: Daytona installed, but Homebrew could not trust its tap"
+		fi
+		;;
+	Linux)
+		need curl "install curl with your system package manager"
+		architecture="$(uname -m)"
+		case "$architecture" in
+		x86_64 | amd64) architecture="amd64" ;;
+		aarch64 | arm64) architecture="arm64" ;;
+		*) die "unsupported Linux architecture '$architecture'" ;;
+		esac
+
+		download_url="https://github.com/daytona/clients/releases/latest/download/daytona-linux-$architecture"
+		download_file="$(mktemp "${TMPDIR:-/tmp}/daytona.XXXXXX")"
+		curl -fL "$download_url" -o "$download_file"
+		chmod 755 "$download_file"
+		sudo install -m 755 "$download_file" /usr/local/bin/daytona
+		rm -f "$download_file"
+		;;
+	*)
+		die "automatic installation is supported on macOS and Linux; see https://www.daytona.io/docs/en/tools/cli/"
+		;;
+	esac
+
+	command -v daytona >/dev/null 2>&1 ||
+		die "installation finished but 'daytona' is not on PATH"
+	daytona version
+	note "Daytona CLI installed; next run: task remote:login"
+}
+
+cmd_login() {
+	need daytona "run 'task remote:init'"
+
+	if [[ -n "${DAYTONA_API_KEY:-}" ]]; then
+		note "logging in with DAYTONA_API_KEY"
+		daytona login --api-key "$DAYTONA_API_KEY"
+	else
+		note "opening Daytona browser login"
+		daytona login
+	fi
+
+	note "login complete; verify with: task remote:check"
+}
+
+cmd_snapshot() {
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+
+	local snapshot dockerfile context cpu memory disk region repo_slug
+	repo_slug="$(basename "$ROOT" | tr '[:upper:]_' '[:lower:]-')"
+	snapshot="${REMOTE_SNAPSHOT:-$repo_slug-dev}"
+	dockerfile="${REMOTE_DOCKERFILE:-.devcontainer/Dockerfile}"
+	context="${REMOTE_BUILD_CONTEXT:-.devcontainer}"
+	cpu="${REMOTE_SNAPSHOT_CPU:-2}"
+	memory="${REMOTE_SNAPSHOT_MEMORY:-4}"
+	disk="${REMOTE_SNAPSHOT_DISK:-10}"
+	region="${REMOTE_REGION:-}"
+
+	positive_integer "CPU" "$cpu"
+	positive_integer "MEMORY" "$memory"
+	positive_integer "DISK" "$disk"
+	[[ -f "$ROOT/$dockerfile" ]] || die "Dockerfile not found: $dockerfile"
+	[[ -d "$ROOT/$context" ]] || die "build context not found: $context"
+
+	local -a snapshot_args
+	snapshot_args=(
+		snapshot create "$snapshot"
+		--dockerfile "$dockerfile"
+		--context "$context"
+		--cpu "$cpu"
+		--memory "$memory"
+		--disk "$disk"
+	)
+	[[ -z "$region" ]] || snapshot_args+=(--region "$region")
+
+	note "building Daytona snapshot '$snapshot' from $dockerfile"
+	(
+		cd "$ROOT"
+		daytona "${snapshot_args[@]}"
+	)
+	note "use it with: task remote:start NAME=01 SNAPSHOT=$snapshot"
+}
+
+cmd_start() {
+	validate_name
+	context_parts
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+	need jq "brew install jq"
+
+	local dir sandbox repo source_ref commit branch context_url clone
+	local cpu memory disk auto_stop snapshot target
+	dir="$(session_dir)"
+	[[ ! -e "$dir" ]] || die "session '$NAME' already exists at $dir"
+
+	sandbox="$(sandbox_name_for)"
+	repo="${REMOTE_REPO:-$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)}"
+	repo="$(github_https_url "$repo")"
+	branch="$(git -C "$ROOT" branch --show-current)"
+	source_ref="${REMOTE_GIT_REF:-${branch:-HEAD}}"
+	commit="$(git -C "$ROOT" rev-parse HEAD)"
+	context_url="$(github_context_url "$repo")"
+	clone="${REMOTE_CLONE:-1}"
+	cpu="${REMOTE_CPU:-2}"
+	memory="${REMOTE_MEMORY:-4096}"
+	disk="${REMOTE_DISK:-10}"
+	auto_stop="${REMOTE_AUTO_STOP:-60}"
+	snapshot="${REMOTE_SNAPSHOT:-}"
+	target="${REMOTE_TARGET:-}"
+
+	positive_integer "CPU" "$cpu"
+	positive_integer "MEMORY" "$memory"
+	positive_integer "DISK" "$disk"
+	nonnegative_integer "AUTO_STOP" "$auto_stop"
+
+	local -a create_args
+	create_args=(
+		create
+		--name "$sandbox"
+		--auto-stop "$auto_stop"
+		--label "managed-by=task-remote"
+		--label "session-name=$NAME"
+		--label "context-kind=$CONTEXT_KIND"
+	)
+	if [[ -n "$snapshot" ]]; then
+		create_args+=(--snapshot "$snapshot")
+	else
+		create_args+=(--cpu "$cpu" --memory "$memory" --disk "$disk")
+	fi
+	[[ -z "$target" ]] || create_args+=(--target "$target")
+
+	if ! git -C "$ROOT" diff --quiet || ! git -C "$ROOT" diff --cached --quiet; then
+		note "warning: the local worktree is dirty; uncommitted files will not be cloned"
+	fi
+	note "creating Daytona sandbox '$sandbox'"
+	daytona "${create_args[@]}"
+
+	mkdir -p "$dir"
+	refresh_sandbox_info "$sandbox" "$dir"
+
+	jq -n \
+		--arg name "$NAME" \
+		--arg sandboxName "$sandbox" \
+		--arg kind "$CONTEXT_KIND" \
+		--arg ref "$CONTEXT_REF" \
+		--arg url "$context_url" \
+		--arg purpose "${REMOTE_PURPOSE:-}" \
+		--arg repo "$repo" \
+		--arg gitRef "$source_ref" \
+		--arg commit "$commit" \
+		--argjson dirty "$(git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet && printf false || printf true)" \
+		--arg snapshot "$snapshot" \
+		--arg target "${target:-default}" \
+		--argjson cpu "$cpu" \
+		--argjson memoryMb "$memory" \
+		--argjson diskGb "$disk" \
+		--argjson autoStopMinutes "$auto_stop" \
+		--arg createdAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+		'{
+			schemaVersion: 1,
+			name: $name,
+			localState: "running",
+			context: {
+				kind: $kind,
+				ref: (if $ref == "" then null else $ref end),
+				url: (if $url == "" then null else $url end),
+				purpose: (if $purpose == "" then null else $purpose end)
+			},
+			source: {
+				repository: $repo,
+				gitRef: $gitRef,
+				localCommit: $commit,
+				localWorktreeWasDirty: $dirty
+			},
+			sandbox: {
+				name: $sandboxName,
+				snapshot: (if $snapshot == "" then null else $snapshot end),
+				target: $target,
+				cpu: $cpu,
+				memoryMb: $memoryMb,
+				diskGb: $diskGb,
+				autoStopMinutes: $autoStopMinutes
+			},
+			workspace: "/workspace",
+			commands: {
+				ssh: ("task remote:ssh NAME=" + $name),
+				info: ("task remote:info NAME=" + $name),
+				stop: ("task remote:stop NAME=" + $name),
+				resume: ("task remote:resume NAME=" + $name)
+			},
+			createdAt: $createdAt,
+			updatedAt: $createdAt
+		}' >"$dir/session.json"
+
+	write_session_helpers "$dir" "$sandbox"
+
+	if [[ "$clone" == "1" || "$clone" == "true" ]]; then
+		if [[ -z "$repo" ]]; then
+			note "no Git remote found; sandbox was created without cloning"
+		elif bootstrap_git "$sandbox" "$repo" "$source_ref" >"$dir/bootstrap.log" 2>&1; then
+			note "repository prepared at /workspace"
+		else
+			update_local_state "running-bootstrap-failed"
+			note "sandbox is running, but repository bootstrap failed; see $dir/bootstrap.log"
+			note "private repositories need credentials configured inside Daytona"
+			return 1
+		fi
+	fi
+
+	note "session saved to $dir"
+	note "connect with: task remote:ssh NAME=$NAME"
+}
+
+cmd_list() {
+	need jq "brew install jq"
+	mkdir -p "$SESSIONS_DIR"
+
+	local found=0 file sandbox remote_state
+	printf '%-18s %-12s %-18s %-28s %s\n' "NAME" "STATE" "CONTEXT" "SANDBOX" "PURPOSE"
+	while IFS= read -r file; do
+		found=1
+		sandbox="$(jq -r '.sandbox.name' "$file")"
+		remote_state="$(jq -r '.localState // "unknown"' "$file")"
+		if command -v daytona >/dev/null 2>&1; then
+			remote_state="$(
+				daytona info "$sandbox" --format json 2>/dev/null |
+					jq -r '.state // .sandbox.state // empty' || true
+			)"
+			[[ -n "$remote_state" ]] || remote_state="$(jq -r '.localState // "unknown"' "$file")"
+		fi
+		jq -r --arg state "$remote_state" '
+			[
+				.name,
+				$state,
+				(.context.kind + (if .context.ref then ":" + .context.ref else "" end)),
+				.sandbox.name,
+				(.context.purpose // "")
+			] | @tsv
+		' "$file" |
+			awk -F '\t' '{ printf "%-18s %-12s %-18s %-28s %s\n", $1, $2, $3, $4, $5 }'
+	done < <(find "$SESSIONS_DIR" -mindepth 2 -maxdepth 2 -name session.json -not -path '*/.archive/*' -print | sort)
+
+	[[ "$found" == "1" ]] || note "no tracked sessions"
+}
+
+cmd_info() {
+	require_session
+	local sandbox dir
+	sandbox="$(sandbox_name_from_session)"
+	dir="$(session_dir)"
+	refresh_sandbox_info "$sandbox" "$dir"
+	jq -n \
+		--slurpfile session "$dir/session.json" \
+		--slurpfile sandbox "$dir/sandbox.json" \
+		'{session: $session[0], daytona: ($sandbox[0] // null)}'
+}
+
+cmd_ssh() {
+	require_session
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+	exec daytona ssh "$(sandbox_name_from_session)"
+}
+
+cmd_exec() {
+	require_session
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+	[[ -n "${REMOTE_COMMAND:-}" ]] || die "CMD is required"
+	exec daytona exec "$(sandbox_name_from_session)" --cwd /workspace -- \
+		"$REMOTE_COMMAND"
+}
+
+cmd_url() {
+	require_session
+	need daytona "run 'task remote:init'"
+
+	local sandbox port expires url dir
+	sandbox="$(sandbox_name_from_session)"
+	port="${REMOTE_PORT:-5173}"
+	expires="${REMOTE_EXPIRES:-86400}"
+	dir="$(session_dir)/ports"
+
+	positive_integer "PORT" "$port"
+	positive_integer "EXPIRES" "$expires"
+
+	url="$(daytona preview-url "$sandbox" --port "$port" --expires "$expires" | tail -n 1)"
+	[[ "$url" == http://* || "$url" == https://* ]] ||
+		die "Daytona did not return a preview URL"
+
+	mkdir -p "$dir"
+	jq -n \
+		--argjson port "$port" \
+		--arg url "$url" \
+		--argjson expiresInSeconds "$expires" \
+		--arg generatedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+		'{
+			port: $port,
+			url: $url,
+			expiresInSeconds: $expiresInSeconds,
+			generatedAt: $generatedAt
+		}' >"$dir/$port.json"
+	printf '%s\n' "$url" >"$dir/$port.url"
+
+	note "saved port mapping to $dir/$port.json"
+	printf '%s\n' "$url"
+}
+
+cmd_serve() {
+	require_session
+	need daytona "run 'task remote:init'"
+
+	local sandbox workspace port expires command log_file ready attempt
+	sandbox="$(sandbox_name_from_session)"
+	workspace="$(jq -er '.workspace' "$(session_file)")"
+	port="${REMOTE_PORT:-5173}"
+	expires="${REMOTE_EXPIRES:-86400}"
+	command="${REMOTE_COMMAND:-pnpm exec vite dev --host 0.0.0.0 --port $port}"
+	log_file="/tmp/remote-$NAME-$port.log"
+	ready=0
+
+	positive_integer "PORT" "$port"
+	positive_integer "EXPIRES" "$expires"
+
+	note "starting on port $port: $command"
+	daytona exec "$sandbox" --cwd "$workspace" -- \
+		nohup "$command" '>' "$log_file" '2>&1' '&'
+
+	for attempt in $(seq 1 30); do
+		if daytona exec "$sandbox" -- \
+			curl -fsS -o /dev/null "http://127.0.0.1:$port/" >/dev/null 2>&1; then
+			ready=1
+			break
+		fi
+		sleep 1
+	done
+
+	if [[ "$ready" != "1" ]]; then
+		note "server did not become ready; remote log follows"
+		daytona exec "$sandbox" -- cat "$log_file" || true
+		return 1
+	fi
+
+	note "server is healthy on port $port"
+	REMOTE_PORT="$port" REMOTE_EXPIRES="$expires" cmd_url
+}
+
+cmd_portless() {
+	require_session
+	need daytona "run 'task remote:init'"
+	need portless "install with 'npm install --global portless'"
+	need curl "install curl"
+	need ssh "install OpenSSH"
+
+	local sandbox remote_port local_port proxy_port alias expires_minutes checksum
+	local dir metadata tunnel_log ssh_token tunnel_pid url ready attempt
+	sandbox="$(sandbox_name_from_session)"
+	remote_port="${REMOTE_PORT:-5173}"
+	proxy_port="${REMOTE_PORTLESS_PROXY_PORT:-1355}"
+	alias="${REMOTE_PORTLESS_ALIAS:-$NAME}"
+	expires_minutes="${REMOTE_SSH_EXPIRES_MINUTES:-1440}"
+	dir="$(session_dir)/portless"
+	metadata="$dir/$remote_port.json"
+	tunnel_log="$dir/$remote_port-ssh.log"
+	ready=0
+
+	positive_integer "PORT" "$remote_port"
+	positive_integer "PROXY_PORT" "$proxy_port"
+	positive_integer "EXPIRES_MINUTES" "$expires_minutes"
+	[[ "$alias" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] ||
+		die "ALIAS must contain only letters, numbers, dots, and hyphens"
+
+	if [[ -n "${REMOTE_LOCAL_PORT:-}" ]]; then
+		local_port="$REMOTE_LOCAL_PORT"
+	else
+		checksum="$(printf '%s' "$sandbox:$remote_port" | cksum | awk '{print $1}')"
+		local_port="$((40000 + checksum % 10000))"
+	fi
+	positive_integer "LOCAL_PORT" "$local_port"
+
+	if [[ -f "$metadata" ]]; then
+		tunnel_pid="$(jq -r '.tunnelPid // empty' "$metadata")"
+		if [[ "$tunnel_pid" =~ ^[0-9]+$ ]] &&
+			kill -0 "$tunnel_pid" 2>/dev/null &&
+			curl -fsS -o /dev/null "http://127.0.0.1:$local_port/" 2>/dev/null; then
+			note "reusing active SSH tunnel on local port $local_port"
+			ready=1
+		fi
+	fi
+
+	if [[ "$ready" != "1" ]]; then
+		if lsof -nP -iTCP:"$local_port" -sTCP:LISTEN >/dev/null 2>&1; then
+			die "local port $local_port is already in use"
+		fi
+
+		mkdir -p "$dir"
+		ssh_token="$(create_ssh_token "$sandbox" "$expires_minutes")"
+		nohup ssh -N \
+			-o ExitOnForwardFailure=yes \
+			-o ServerAliveInterval=30 \
+			-o ServerAliveCountMax=3 \
+			-o StrictHostKeyChecking=accept-new \
+			-L "$local_port:127.0.0.1:$remote_port" \
+			"$ssh_token@ssh.app.daytona.io" \
+			>"$tunnel_log" 2>&1 &
+		tunnel_pid="$!"
+		unset ssh_token
+
+		for attempt in $(seq 1 15); do
+			if curl -fsS -o /dev/null "http://127.0.0.1:$local_port/" 2>/dev/null; then
+				ready=1
+				break
+			fi
+			if ! kill -0 "$tunnel_pid" 2>/dev/null; then
+				break
+			fi
+			sleep 1
+		done
+
+		if [[ "$ready" != "1" ]]; then
+			note "SSH tunnel failed; see $tunnel_log"
+			return 1
+		fi
+	fi
+
+	portless proxy start --no-tls --port "$proxy_port"
+	portless alias "$alias" "$local_port" --force
+	url="http://$alias.localhost:$proxy_port"
+
+	jq -n \
+		--arg sandbox "$sandbox" \
+		--argjson remotePort "$remote_port" \
+		--argjson localPort "$local_port" \
+		--arg alias "$alias" \
+		--argjson proxyPort "$proxy_port" \
+		--argjson tunnelPid "$tunnel_pid" \
+		--arg url "$url" \
+		--arg createdAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+		'{
+			state: "running",
+			sandbox: $sandbox,
+			remotePort: $remotePort,
+			localPort: $localPort,
+			alias: $alias,
+			proxyPort: $proxyPort,
+			tunnelPid: $tunnelPid,
+			url: $url,
+			createdAt: $createdAt
+		}' >"$metadata"
+
+	note "local tunnel $local_port -> $sandbox:$remote_port"
+	printf '%s\n' "$url"
+}
+
+cmd_portless_stop() {
+	require_session
+	need jq "brew install jq"
+
+	local dir metadata tunnel_pid local_port alias
+	dir="$(session_dir)/portless"
+	[[ -d "$dir" ]] || die "session '$NAME' has no tracked Portless tunnels"
+
+	while IFS= read -r metadata; do
+		tunnel_pid="$(jq -r '.tunnelPid // empty' "$metadata")"
+		local_port="$(jq -r '.localPort' "$metadata")"
+		alias="$(jq -r '.alias' "$metadata")"
+
+		if [[ "$tunnel_pid" =~ ^[0-9]+$ ]] && kill -0 "$tunnel_pid" 2>/dev/null; then
+			if ps -p "$tunnel_pid" -o command= | grep -F -- "$local_port:127.0.0.1" >/dev/null; then
+				kill "$tunnel_pid"
+			else
+				note "refusing to stop PID $tunnel_pid because it is not the tracked SSH tunnel"
+			fi
+		fi
+
+		if command -v portless >/dev/null 2>&1; then
+			portless alias --remove "$alias" || true
+		fi
+
+		jq --arg stoppedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+			'.state = "stopped" | .stoppedAt = $stoppedAt' "$metadata" >"$metadata.tmp"
+		mv "$metadata.tmp" "$metadata"
+		note "stopped local tunnel for $alias (local port $local_port)"
+	done < <(find "$dir" -maxdepth 1 -name '*.json' -type f -print)
+}
+
+cmd_stop() {
+	require_session
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+	local sandbox
+	sandbox="$(sandbox_name_from_session)"
+	daytona stop "$sandbox"
+	update_local_state "stopped"
+	refresh_sandbox_info "$sandbox" "$(session_dir)"
+	note "stopped '$NAME'; metadata and remote filesystem were preserved"
+}
+
+cmd_resume() {
+	require_session
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+	local sandbox
+	sandbox="$(sandbox_name_from_session)"
+	daytona start "$sandbox"
+	update_local_state "running"
+	refresh_sandbox_info "$sandbox" "$(session_dir)"
+	note "resumed '$NAME'"
+}
+
+cmd_destroy() {
+	require_session
+	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
+	local sandbox dir archive_dir
+	sandbox="$(sandbox_name_from_session)"
+	dir="$(session_dir)"
+	archive_dir="$SESSIONS_DIR/.archive/$NAME-$(date -u +'%Y%m%dT%H%M%SZ')"
+
+	daytona delete "$sandbox"
+	mkdir -p "$(dirname "$archive_dir")"
+	update_local_state "deleted"
+	mv "$dir" "$archive_dir"
+	note "deleted Daytona sandbox '$sandbox'"
+	note "local metadata is recoverable at $archive_dir"
+}
+
+cmd_help() {
+	cat <<'EOF'
+Usage: ./scripts/remote COMMAND
+
+Commands:
+  init     Install the Daytona CLI if needed
+  login    Authenticate with browser login or DAYTONA_API_KEY
+  check    Verify local Daytona tooling
+  snapshot Build a reusable snapshot from the local devcontainer
+  start    Create a tracked sandbox
+  list     List tracked sandboxes
+  info     Show session and live Daytona metadata
+  ssh      Open an SSH connection
+  exec     Execute REMOTE_COMMAND in the workspace
+  serve    Start a background dev server and generate its URL
+  url      Generate and store a signed URL for a remote port
+  portless Create a local SSH tunnel and friendly Portless URL
+  portless-stop Stop tracked local tunnels and remove Portless aliases
+  stop     Stop while preserving the sandbox filesystem
+  resume   Start a stopped sandbox
+  destroy  Delete the sandbox and archive local metadata
+EOF
+}
+
+case "$COMMAND" in
+init) cmd_init ;;
+login) cmd_login ;;
+check) cmd_check ;;
+snapshot) cmd_snapshot ;;
+start) cmd_start ;;
+list) cmd_list ;;
+info) cmd_info ;;
+ssh) cmd_ssh ;;
+exec) cmd_exec ;;
+serve) cmd_serve ;;
+url) cmd_url ;;
+portless) cmd_portless ;;
+portless-stop) cmd_portless_stop ;;
+stop) cmd_stop ;;
+resume | start-stopped) cmd_resume ;;
+destroy) cmd_destroy ;;
+help | -h | --help) cmd_help ;;
+*) die "unknown command '$COMMAND'; run ./scripts/remote help" ;;
+esac

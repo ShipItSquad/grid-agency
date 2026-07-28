@@ -100,7 +100,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Triage issue
+      - name: Implement issue
         if: steps.account.outputs.result == 'true'
         uses: anomalyco/opencode/github@latest
         env:
@@ -110,9 +110,13 @@ jobs:
           model: ${{ vars.OPENCODE_MODEL || 'openai/gpt-5.2' }}
           use_github_token: true
           prompt: |
-            Triage this issue. Confirm whether it is actionable, identify likely
-            affected areas, request only essential missing information, and suggest
-            relevant documentation. Do not invent details that are not in the issue.
+            Implement this issue when it is actionable. Inspect the existing code and
+            follow its patterns, make the smallest complete change, and use reasonable
+            defaults instead of asking nonessential questions. Run the relevant checks.
+            For user-interface changes, start the application and use the agent-browser
+            tools to verify affected routes at desktop and mobile sizes, including page
+            and console errors. If an essential requirement is truly missing, make no
+            speculative edits and reply with only the information needed to proceed.
 
   task:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
