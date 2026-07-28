@@ -32,6 +32,7 @@
 	onDestroy(unlockPage);
 
 	function lockPage() {
+		if (document.body.classList.contains('modal-open')) return;
 		lockedScrollY = window.scrollY;
 		document.documentElement.classList.add('modal-open');
 		document.body.classList.add('modal-open');
@@ -46,7 +47,12 @@
 		document.body.classList.remove('modal-open');
 		document.body.style.removeProperty('top');
 		document.removeEventListener('touchmove', preventBackgroundTouch);
-		if (wasLocked) window.scrollTo(0, lockedScrollY);
+		if (wasLocked) {
+			const scrollBehavior = document.documentElement.style.scrollBehavior;
+			document.documentElement.style.scrollBehavior = 'auto';
+			window.scrollTo(0, lockedScrollY);
+			document.documentElement.style.scrollBehavior = scrollBehavior;
+		}
 	}
 
 	function preventBackgroundTouch(event: TouchEvent) {
@@ -69,9 +75,16 @@
 		const target = returnFocus;
 		returnFocus = null;
 		requestAnimationFrame(() => {
-			const fallback = document.querySelector<HTMLElement>('#menu-toggle');
-			const canRestore = target && target.tabIndex >= 0 && target.getClientRects().length > 0;
-			(canRestore ? target : fallback)?.focus();
+			const candidates = [
+				target,
+				document.querySelector<HTMLElement>('#menu-toggle'),
+				document.querySelector<HTMLElement>('#home-link')
+			];
+			candidates
+				.find(
+					(candidate) => candidate && candidate.tabIndex >= 0 && candidate.getClientRects().length
+				)
+				?.focus();
 		});
 	}
 </script>
