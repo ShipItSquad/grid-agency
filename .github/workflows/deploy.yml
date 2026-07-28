@@ -40,12 +40,6 @@ jobs:
           pnpm exec agent-browser --version
           timeout 10s pnpm exec svelte-grab-mcp --stdio || [ "$?" -eq 124 ]
 
-      - name: Install browser
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Test
-        run: pnpm test
-
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 

@@ -4,8 +4,8 @@
 	--blue: #0070f3;
 	--acid: #fafafa;
 	--surface: #f2f2f2;
-	--line: #8f8f8f;
-	--dark-line: #666666;
+	--line: #767676;
+	--line-on-dark: #8f8f8f;
 	--page-pad: clamp(1rem, 3.2vw, 3.75rem);
 	--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
 	--display: Georgia, 'Times New Roman', serif;
