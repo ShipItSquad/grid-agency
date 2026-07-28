@@ -1,15 +1,20 @@
 import { expect, test } from '@playwright/test';
 
+async function gotoApp(page: import('@playwright/test').Page, path = '/') {
+	await page.goto(path, { waitUntil: 'load' });
+	await expect(page.getByRole('link', { name: 'Off Grid home' })).toBeVisible();
+}
+
 test('sets the route theme color', async ({ page }) => {
-	await page.goto('/', { waitUntil: 'networkidle' });
+	await gotoApp(page);
 	await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0070f3');
 
-	await page.goto('/blog', { waitUntil: 'networkidle' });
+	await gotoApp(page, '/blog');
 	await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#ffffff');
 });
 
 test('moves focus into the modal and restores it on Escape', async ({ page }) => {
-	await page.goto('/', { waitUntil: 'networkidle' });
+	await gotoApp(page);
 	const services = page.getByRole('button', { name: 'Services' });
 	await services.click();
 
@@ -25,7 +30,7 @@ test('moves focus into the modal and restores it on Escape', async ({ page }) =>
 });
 
 test('preserves the page scroll position while the modal is open', async ({ page }) => {
-	await page.goto('/', { waitUntil: 'networkidle' });
+	await gotoApp(page);
 	await page.evaluate(() => window.scrollTo(0, 500));
 	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(500);
 
@@ -41,7 +46,7 @@ test('preserves the page scroll position while the modal is open', async ({ page
 
 test('restores visible focus after opening from the mobile menu', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
-	await page.goto('/', { waitUntil: 'networkidle' });
+	await gotoApp(page);
 
 	const menu = page.getByRole('button', { name: 'Toggle navigation' });
 	await menu.click();
