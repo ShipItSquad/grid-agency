@@ -18,7 +18,9 @@
 </script>
 
 <header class:menu-open={menuOpen}>
-	<a class="brand" href={resolve('/')} aria-label="Off Grid home">OFF<span>/</span>GRID</a>
+	<a id="home-link" class="brand" href={resolve('/')} aria-label="Off Grid home"
+		>OFF<span>/</span>GRID</a
+	>
 	<nav id="main-navigation" aria-label="Main navigation">
 		{#each links as link (link.href)}
 			<a

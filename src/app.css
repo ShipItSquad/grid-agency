@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap');
-
 :root {
 	--paper: #ffffff;
 	--ink: #000000;
@@ -9,8 +7,8 @@
 	--line: #8f8f8f;
 	--dark-line: #666666;
 	--page-pad: clamp(1rem, 3.2vw, 3.75rem);
-	--sans: 'DM Sans', Arial, sans-serif;
-	--display: 'Instrument Serif', Georgia, serif;
+	--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+	--display: Georgia, 'Times New Roman', serif;
 	font-family: var(--sans);
 	color: var(--ink);
 	background: var(--paper);
@@ -36,6 +34,15 @@ html.modal-open,
 body.modal-open,
 body:has(dialog[open]) {
 	overflow: hidden;
+}
+
+html.modal-open {
+	overscroll-behavior: none;
+}
+
+body.modal-open {
+	position: fixed;
+	width: 100%;
 }
 
 a {

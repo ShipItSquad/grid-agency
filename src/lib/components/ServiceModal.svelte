@@ -1,27 +1,64 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import { services } from '$lib/data';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
 	let dialog: HTMLDialogElement;
 	let closeButton: HTMLButtonElement | undefined;
 	let returnFocus: HTMLElement | null = null;
+	let lockedScrollY = 0;
 
 	$effect(() => {
 		if (!dialog) return;
-		document.documentElement.classList.toggle('modal-open', open);
-		document.body.classList.toggle('modal-open', open);
-		if (open && !dialog.open) {
-			returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			dialog.showModal();
-			void focusCloseButton();
+		if (open) {
+			lockPage();
+			if (!dialog.open) {
+				returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+				try {
+					dialog.showModal();
+					void focusCloseButton();
+				} catch {
+					open = false;
+					unlockPage();
+				}
+			}
 		}
-		if (!open && dialog.open) dialog.close();
-		return () => {
-			document.documentElement.classList.remove('modal-open');
-			document.body.classList.remove('modal-open');
-		};
+		if (!open) {
+			if (dialog.open) dialog.close();
+			else unlockPage();
+		}
 	});
+
+	onDestroy(unlockPage);
+
+	function lockPage() {
+		if (document.body.classList.contains('modal-open')) return;
+		lockedScrollY = window.scrollY;
+		document.documentElement.classList.add('modal-open');
+		document.body.classList.add('modal-open');
+		document.body.style.top = `-${lockedScrollY}px`;
+		document.addEventListener('touchmove', preventBackgroundTouch, { passive: false });
+	}
+
+	function unlockPage() {
+		if (typeof document === 'undefined') return;
+		const wasLocked = document.body.classList.contains('modal-open');
+		document.documentElement.classList.remove('modal-open');
+		document.body.classList.remove('modal-open');
+		document.body.style.removeProperty('top');
+		document.removeEventListener('touchmove', preventBackgroundTouch);
+		if (wasLocked) {
+			const scrollBehavior = document.documentElement.style.scrollBehavior;
+			document.documentElement.style.scrollBehavior = 'auto';
+			window.scrollTo(0, lockedScrollY);
+			document.documentElement.style.scrollBehavior = scrollBehavior;
+		}
+	}
+
+	function preventBackgroundTouch(event: TouchEvent) {
+		if (event.target instanceof Node && dialog.contains(event.target)) return;
+		event.preventDefault();
+	}
 
 	async function focusCloseButton() {
 		await tick();
@@ -34,11 +71,20 @@
 
 	function handleClose() {
 		open = false;
+		unlockPage();
 		const target = returnFocus;
 		returnFocus = null;
 		requestAnimationFrame(() => {
-			const fallback = document.querySelector<HTMLElement>('#menu-toggle');
-			(target?.getClientRects().length ? target : fallback)?.focus();
+			const candidates = [
+				target,
+				document.querySelector<HTMLElement>('#menu-toggle'),
+				document.querySelector<HTMLElement>('#home-link')
+			];
+			candidates
+				.find(
+					(candidate) => candidate && candidate.tabIndex >= 0 && candidate.getClientRects().length
+				)
+				?.focus();
 		});
 	}
 </script>
@@ -47,6 +93,7 @@
 	bind:this={dialog}
 	id="services-dialog"
 	aria-labelledby="services-title"
+	aria-describedby="services-description"
 	aria-modal="true"
 	onclose={handleClose}
 	onclick={(event) => event.target === dialog && close()}
@@ -86,7 +133,9 @@
 		</div>
 
 		<div class="modal-foot">
-			<p>This is a preview. Project enquiries will be enabled in the next release.</p>
+			<p id="services-description">
+				This is a preview. Project enquiries will be enabled in the next release.
+			</p>
 			<span>Available Q4 2026</span>
 		</div>
 	</div>
@@ -99,8 +148,11 @@
 		max-height: calc(100dvh - 2rem);
 		padding: 0;
 		border: 0;
+		overflow: auto;
+		overscroll-behavior: contain;
 		background: transparent;
 		color: var(--ink);
+		touch-action: pan-y;
 	}
 
 	dialog::backdrop {
