@@ -5,7 +5,7 @@
 <footer>
 	<div class="footer-lead">
 		<p class="eyebrow">Start somewhere interesting</p>
-		<a href="mailto:hello@offgrid.studio">hello@offgrid.studio <span>↗</span></a>
+		<a href="mailto:hello@offgrid.studio">hello@offgrid.studio <span aria-hidden="true">↗</span></a>
 	</div>
 	<div class="footer-meta">
 		<a class="brand" href={resolve('/')}>OFF/GRID</a>

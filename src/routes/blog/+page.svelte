@@ -28,7 +28,7 @@
 				<p class="excerpt">{post.excerpt}</p>
 			</div>
 			<div class="date">{post.date}</div>
-			<span class="arrow">↗</span>
+			<span class="arrow" aria-hidden="true">↗</span>
 		</article>
 	{/each}
 	<div class="coming-soon">

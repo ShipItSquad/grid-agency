@@ -117,8 +117,11 @@
 		max-height: calc(100dvh - 2rem);
 		padding: 0;
 		border: 0;
+		overflow: auto;
+		overscroll-behavior: contain;
 		background: transparent;
 		color: var(--ink);
+		touch-action: pan-y;
 	}
 
 	dialog::backdrop {
