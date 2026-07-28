@@ -26,7 +26,7 @@ pnpm lint
 pnpm build
 ```
 
-The dev container includes Node 24, pnpm, OpenCode, and the project dependencies. Run `opencode` and `pnpm dev` in separate terminals. OpenCode launches Svelte Grab over stdio; that same process serves the browser context endpoint on port `4723`, which the container forwards so the development site can send element selections back to OpenCode.
+The dev container uses the Node 24 Bookworm slim image and includes pnpm, OpenCode, tmux, your project tmux key bindings, and the project dependencies. Run `opencode` and `pnpm dev` in separate terminals. OpenCode launches Svelte Grab over stdio; that same process serves the browser context endpoint on port `4723`, which the container forwards so the development site can send element selections back to OpenCode.
 
 ## Svelte Grab
 
