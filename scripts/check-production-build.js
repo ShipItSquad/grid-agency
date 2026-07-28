@@ -5,7 +5,12 @@ const forbiddenPatterns = ['svelte-grab', 'SvelteGrab', 'SvelteDevKit'];
 const textExtensions = new Set(['.cjs', '.css', '.html', '.js', '.json', '.map', '.mjs']);
 
 async function findFile(directory, filename) {
-	for (const entry of await readdir(directory, { withFileTypes: true })) {
+	const entries = await readdir(directory, { withFileTypes: true }).catch((error) => {
+		if (error.code === 'ENOENT') return [];
+		throw error;
+	});
+
+	for (const entry of entries) {
 		const path = join(directory, entry.name);
 		if (entry.isDirectory()) {
 			const match = await findFile(path, filename);
