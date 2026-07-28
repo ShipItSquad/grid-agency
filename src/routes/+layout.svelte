@@ -41,7 +41,7 @@
 	<meta name="theme-color" content={themeColor} />
 </svelte:head>
 
-<Header onServices={() => (servicesOpen = true)} />
+<Header {servicesOpen} onServices={() => (servicesOpen = true)} />
 <main>{@render children()}</main>
 <Footer />
 <ServiceModal bind:open={servicesOpen} />

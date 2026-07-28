@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import type { RouteId } from '$app/types';
 
-	let { onServices }: { onServices: () => void } = $props();
+	let { onServices, servicesOpen }: { onServices: () => void; servicesOpen: boolean } = $props();
 	let menuOpen = $state(false);
 
 	const links: { href: RouteId; label: string }[] = [
@@ -18,8 +18,10 @@
 </script>
 
 <header class:menu-open={menuOpen}>
-	<a class="brand" href={resolve('/')} aria-label="Off Grid home">OFF<span>/</span>GRID</a>
-	<nav aria-label="Main navigation">
+	<a id="home-link" class="brand" href={resolve('/')} aria-label="Off Grid home"
+		>OFF<span>/</span>GRID</a
+	>
+	<nav id="main-navigation" aria-label="Main navigation">
 		{#each links as link (link.href)}
 			<a
 				class:active={isActive(link.href)}
@@ -34,6 +36,7 @@
 			type="button"
 			aria-haspopup="dialog"
 			aria-controls="services-dialog"
+			aria-expanded={servicesOpen}
 			onclick={() => {
 				onServices();
 				menuOpen = false;
@@ -43,10 +46,12 @@
 		</button>
 	</nav>
 	<button
+		id="menu-toggle"
 		class="menu-button"
 		type="button"
 		aria-label="Toggle navigation"
 		aria-expanded={menuOpen}
+		aria-controls="main-navigation"
 		onclick={() => (menuOpen = !menuOpen)}
 	>
 		<span></span><span></span>
