@@ -84,7 +84,7 @@
 				.find(
 					(candidate) => candidate && candidate.tabIndex >= 0 && candidate.getClientRects().length
 				)
-				?.focus();
+				?.focus({ preventScroll: true });
 		});
 	}
 </script>
