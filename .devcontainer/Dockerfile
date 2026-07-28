@@ -5,6 +5,7 @@ ENV PATH=$PNPM_HOME/bin:$PNPM_HOME:$PATH
 
 RUN corepack enable \
 	&& corepack install --global pnpm@11.5.3 \
+	&& mkdir -p /usr/local/share/npm-global/bin \
 	&& ln -sf /usr/local/bin/pnpm /usr/local/share/npm-global/bin/pnpm \
 	&& pnpm add --global --allow-build=opencode-ai opencode-ai@1.18.5
 

@@ -19,9 +19,13 @@
 
 	onMount(() => {
 		if (import.meta.env.DEV) {
-			void import('svelte-grab').then(({ SvelteDevKit: DevKit }) => {
-				SvelteDevKit = DevKit;
-			});
+			void import('svelte-grab')
+				.then(({ SvelteDevKit: DevKit }) => {
+					SvelteDevKit = DevKit;
+				})
+				.catch((error) => {
+					console.warn('[svelte-grab] Failed to load development tools', error);
+				});
 		}
 	});
 </script>
