@@ -8,4 +8,4 @@ RUN corepack enable \
 	&& ln -sf /usr/local/bin/pnpm /usr/local/share/npm-global/bin/pnpm \
 	&& pnpm add --global --allow-build=opencode-ai opencode-ai@1.18.5
 
-COPY --chmod=755 opencode-wrapper /usr/local/share/npm-global/bin/opencode
+COPY --chmod=755 opencode-wrapper /usr/local/bin/opencode

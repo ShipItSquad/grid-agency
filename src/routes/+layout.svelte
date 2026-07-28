@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { dev } from '$app/environment';
-	import { SvelteDevKit } from 'svelte-grab';
 	import { onMount } from 'svelte';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
@@ -12,7 +10,7 @@
 
 	const homePath = resolve('/').replace(/\/$/, '') || '/';
 	let { children } = $props();
-	let mounted = $state(false);
+	let SvelteDevKit = $state<null | typeof import('svelte-grab').SvelteDevKit>(null);
 	let servicesOpen = $state(false);
 	let isHome = $derived(
 		page.route.id === '/' || (page.url.pathname.replace(/\/$/, '') || '/') === homePath
@@ -20,7 +18,11 @@
 	let themeColor = $derived(isHome ? '#0070f3' : '#ffffff');
 
 	onMount(() => {
-		mounted = true;
+		if (import.meta.env.DEV) {
+			void import('svelte-grab').then(({ SvelteDevKit: DevKit }) => {
+				SvelteDevKit = DevKit;
+			});
+		}
 	});
 </script>
 
@@ -33,6 +35,6 @@
 <main>{@render children()}</main>
 <Footer />
 <ServiceModal bind:open={servicesOpen} />
-{#if dev && mounted}
+{#if SvelteDevKit}
 	<SvelteDevKit enableMcp />
 {/if}

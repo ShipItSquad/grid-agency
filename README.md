@@ -11,6 +11,8 @@ A static SvelteKit site for a fictional independent design practice. The project
 
 ## Local development
 
+Use Node.js 24 or newer and pnpm 11.5.3 or newer. Alternatively, reopen the project in its dev container to get the complete toolchain automatically.
+
 ```sh
 pnpm install
 pnpm dev

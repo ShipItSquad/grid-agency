@@ -29,11 +29,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.18.0
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Check development tools
+        run: |
+          pnpm exec agent-browser --version
+          timeout 3s pnpm exec svelte-grab-mcp --stdio || [ "$?" -eq 124 ]
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
