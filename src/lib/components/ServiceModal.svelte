@@ -14,11 +14,19 @@
 			lockPage();
 			if (!dialog.open) {
 				returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-				dialog.showModal();
-				void focusCloseButton();
+				try {
+					dialog.showModal();
+					void focusCloseButton();
+				} catch {
+					open = false;
+					unlockPage();
+				}
 			}
 		}
-		if (!open && dialog.open) dialog.close();
+		if (!open) {
+			if (dialog.open) dialog.close();
+			else unlockPage();
+		}
 	});
 
 	onDestroy(unlockPage);
