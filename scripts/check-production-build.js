@@ -22,3 +22,11 @@ async function checkDirectory(directory) {
 }
 
 await checkDirectory('build');
+
+const manifestPath = '.svelte-kit/output/client/.vite/manifest.json';
+const manifest = JSON.stringify(JSON.parse(await readFile(manifestPath, 'utf8')));
+const manifestPattern = forbiddenPatterns.find((candidate) => manifest.includes(candidate));
+
+if (manifestPattern) {
+	throw new Error(`Production manifest ${manifestPath} contains ${manifestPattern}`);
+}
