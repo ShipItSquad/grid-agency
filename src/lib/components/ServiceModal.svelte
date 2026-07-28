@@ -28,6 +28,7 @@
 		document.documentElement.classList.add('modal-open');
 		document.body.classList.add('modal-open');
 		document.body.style.top = `-${lockedScrollY}px`;
+		document.addEventListener('touchmove', preventBackgroundTouch, { passive: false });
 	}
 
 	function unlockPage() {
@@ -36,7 +37,13 @@
 		document.documentElement.classList.remove('modal-open');
 		document.body.classList.remove('modal-open');
 		document.body.style.removeProperty('top');
+		document.removeEventListener('touchmove', preventBackgroundTouch);
 		if (wasLocked) window.scrollTo(0, lockedScrollY);
+	}
+
+	function preventBackgroundTouch(event: TouchEvent) {
+		if (event.target instanceof Node && dialog.contains(event.target)) return;
+		event.preventDefault();
 	}
 
 	async function focusCloseButton() {
@@ -65,6 +72,7 @@
 	bind:this={dialog}
 	id="services-dialog"
 	aria-labelledby="services-title"
+	aria-describedby="services-description"
 	aria-modal="true"
 	onclose={handleClose}
 	onclick={(event) => event.target === dialog && close()}
@@ -104,7 +112,9 @@
 		</div>
 
 		<div class="modal-foot">
-			<p>This is a preview. Project enquiries will be enabled in the next release.</p>
+			<p id="services-description">
+				This is a preview. Project enquiries will be enabled in the next release.
+			</p>
 			<span>Available Q4 2026</span>
 		</div>
 	</div>
