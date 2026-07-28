@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { dev } from '$app/environment';
 	import { env } from '$env/dynamic/public';
 	import { onMount } from 'svelte';
 	import '../app.css';
@@ -45,6 +44,6 @@
 <main>{@render children()}</main>
 <Footer />
 <ServiceModal bind:open={servicesOpen} />
-{#if dev && SvelteDevKit}
+{#if import.meta.env.DEV && SvelteDevKit}
 	<SvelteDevKit enableMcp={enableSvelteGrabMcp} />
 {/if}
