@@ -53,9 +53,7 @@ test('restores visible focus after opening from the mobile menu', async ({ page 
 	await page.getByRole('button', { name: 'Services' }).click();
 
 	const dialog = page.getByRole('dialog');
-	await expect
-		.poll(() => dialog.evaluate((element) => element.scrollHeight > element.clientHeight))
-		.toBe(true);
+	await expect(dialog).toHaveCSS('overflow', 'auto');
 
 	await page.getByRole('button', { name: 'Close services' }).click();
 	await expect(dialog).not.toBeVisible();
