@@ -33,15 +33,18 @@ test('preserves the page scroll position while the modal is open', async ({ page
 	await goto(page);
 	const services = page.getByRole('button', { name: 'Services' });
 	await services.focus();
-	await page.evaluate(() => window.scrollTo(0, 500));
-	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(500);
+	const scrollTarget = await page.evaluate(() =>
+		Math.min(500, Math.max(0, document.documentElement.scrollHeight - window.innerHeight))
+	);
+	await page.evaluate((target) => window.scrollTo(0, target), scrollTarget);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollTarget);
 
 	await page.keyboard.press('Enter');
 
 	await expect(page.locator('body')).toHaveCSS('position', 'fixed');
-	await expect(page.locator('body')).toHaveCSS('top', '-500px');
+	await expect(page.locator('body')).toHaveCSS('top', `${-scrollTarget}px`);
 	await page.getByRole('button', { name: 'Close services' }).click();
-	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(500);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollTarget);
 });
 
 test('restores visible focus after opening from the mobile menu', async ({ page }) => {

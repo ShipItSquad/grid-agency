@@ -94,7 +94,6 @@
 	id="services-dialog"
 	aria-labelledby="services-title"
 	aria-describedby="services-description"
-	aria-modal="true"
 	onclose={handleClose}
 	onclick={(event) => event.target === dialog && close()}
 >
