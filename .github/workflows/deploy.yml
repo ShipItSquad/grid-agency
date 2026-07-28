@@ -38,7 +38,7 @@ jobs:
       - name: Check development tools
         run: |
           pnpm exec agent-browser --version
-          timeout 3s pnpm exec svelte-grab-mcp --stdio || [ "$?" -eq 124 ]
+          timeout 10s pnpm exec svelte-grab-mcp --stdio || [ "$?" -eq 124 ]
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
