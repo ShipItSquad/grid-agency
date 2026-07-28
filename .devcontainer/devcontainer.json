@@ -14,7 +14,7 @@
 			"onAutoForward": "openPreview"
 		},
 		"4723": {
-			"label": "svelte-grab MCP HTTP bridge",
+			"label": "svelte-grab browser context bridge",
 			"onAutoForward": "silent"
 		}
 	},

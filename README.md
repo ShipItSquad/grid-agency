@@ -24,6 +24,8 @@ pnpm lint
 pnpm build
 ```
 
+The dev container includes Node 24, pnpm, OpenCode, and the project dependencies. Run `opencode` and `pnpm dev` in separate terminals. OpenCode launches Svelte Grab over stdio; that same process serves the browser context endpoint on port `4723`, which the container forwards so the development site can send element selections back to OpenCode.
+
 ## Content structure
 
 Mock projects, journal posts, and services live in `src/lib/data.ts`. Shared site components are in `src/lib/components`, while each public URL has its own route under `src/routes`.
