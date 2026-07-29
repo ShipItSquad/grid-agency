@@ -62,6 +62,23 @@ sandbox_name_from_session() {
 	jq -er '.sandbox.name' "$(session_file)"
 }
 
+session_uses_infisical() {
+	jq -e '.secrets.infisical.enabled == true' "$(session_file)" >/dev/null 2>&1
+}
+
+session_uses_aperture() {
+	jq -e '.network.aperture.enabled == true' "$(session_file)" >/dev/null 2>&1
+}
+
+join_shell_args() {
+	local argument
+	for argument in "$@"; do
+		printf "'"
+		printf '%s' "$argument" | sed "s/'/'\\\\''/g"
+		printf "' "
+	done
+}
+
 daytona_config_file() {
 	if [[ -n "${DAYTONA_CONFIG_DIR:-}" ]]; then
 		printf '%s/config.json\n' "$DAYTONA_CONFIG_DIR"
@@ -87,22 +104,40 @@ create_ssh_token() {
 
 	if [[ -n "$api_key" ]]; then
 		response="$(
-			curl -fsS -X POST \
-				"$api_url/sandbox/$sandbox/ssh-access?expiresInMinutes=$expires_minutes" \
-				-H "Authorization: Bearer $api_key"
+			printf 'header = "Authorization: Bearer %s"\n' "$api_key" |
+				curl -fsS --config - -X POST \
+					"$api_url/sandbox/$sandbox/ssh-access?expiresInMinutes=$expires_minutes"
 		)"
 	else
 		access_token="$(jq -er --arg id "$profile_id" '.profiles[] | select(.id == $id) | .api.token.accessToken' "$config")"
 		organization_id="$(jq -er --arg id "$profile_id" '.profiles[] | select(.id == $id) | .activeOrganizationId' "$config")"
 		response="$(
-			curl -fsS -X POST \
-				"$api_url/sandbox/$sandbox/ssh-access?expiresInMinutes=$expires_minutes" \
-				-H "Authorization: Bearer $access_token" \
-				-H "X-Daytona-Organization-ID: $organization_id"
+			printf 'header = "Authorization: Bearer %s"\nheader = "X-Daytona-Organization-ID: %s"\n' \
+				"$access_token" "$organization_id" |
+				curl -fsS --config - -X POST \
+					"$api_url/sandbox/$sandbox/ssh-access?expiresInMinutes=$expires_minutes"
 		)"
 	fi
 
 	printf '%s' "$response" | jq -er '.token'
+}
+
+print_ssh_client_config() {
+	local sandbox="$1" expires_minutes="$2" ssh_token
+	ssh_token="$(create_ssh_token "$sandbox" "$expires_minutes")"
+	printf 'Host daytona-session\n'
+	printf '  HostName ssh.app.daytona.io\n'
+	printf '  User %s\n' "$ssh_token"
+	printf '  ServerAliveInterval 30\n'
+	printf '  ServerAliveCountMax 3\n'
+	printf '  StrictHostKeyChecking accept-new\n'
+	unset ssh_token
+}
+
+write_ssh_client_config() {
+	local output="$3"
+	umask 077
+	print_ssh_client_config "$1" "$2" >"$output"
 }
 
 context_parts() {
@@ -152,10 +187,12 @@ github_context_url() {
 }
 
 write_session_helpers() {
-	local dir="$1"
+	local dir="$1" quoted_name quoted_script
+	quoted_name="$(join_shell_args "$NAME")"
+	quoted_script="$(join_shell_args "$ROOT/scripts/remote")"
 	cat >"$dir/ssh" <<EOF
 #!/usr/bin/env sh
-exec daytona ssh $(printf '%q' "$2") "\$@"
+REMOTE_NAME=$quoted_name exec $quoted_script ssh "\$@"
 EOF
 	chmod 700 "$dir/ssh"
 
@@ -212,6 +249,126 @@ bootstrap_git() {
 		daytona exec "$sandbox" -- git -C "$workspace" checkout -B "remote/$NAME"
 		;;
 	esac
+}
+
+infisical_access_token() {
+	if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
+		[[ "${INFISICAL_ALLOW_TOKEN:-0}" == "1" ]] ||
+			die "set INFISICAL_ALLOW_TOKEN=1 to explicitly use INFISICAL_TOKEN"
+		printf '%s' "$INFISICAL_TOKEN"
+		return
+	fi
+
+	need infisical "run 'task secrets:init'"
+	[[ -n "${INFISICAL_CLIENT_ID:-}" ]] || die "INFISICAL_CLIENT_ID is required"
+	[[ -n "${INFISICAL_CLIENT_SECRET:-}" ]] || die "INFISICAL_CLIENT_SECRET is required"
+
+	local -a login_args
+	login_args=(
+		login
+		--method=universal-auth
+		--silent
+		--plain
+	)
+	[[ -z "${INFISICAL_DOMAIN:-}" ]] || login_args+=(--domain="$INFISICAL_DOMAIN")
+	INFISICAL_UNIVERSAL_AUTH_CLIENT_ID="$INFISICAL_CLIENT_ID" \
+		INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET="$INFISICAL_CLIENT_SECRET" \
+		infisical "${login_args[@]}"
+}
+
+bootstrap_infisical() {
+	local sandbox="$1" token="$2" install_script
+	install_script='set -eu; IFS= read -r token; token_file="${INFISICAL_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/infisical/access-token}"; temp_file="${token_file}.tmp.$$"; trap "rm -f \"$temp_file\"" EXIT; umask 077; mkdir -p "$(dirname "$token_file")"; printf "%s" "$token" >"$temp_file"; unset token; chmod 600 "$temp_file"; mv "$temp_file" "$token_file"; trap - EXIT'
+	printf "sh -c '%s'\n%s\n" "$install_script" "$token" |
+		daytona ssh "$sandbox" --expires 5
+}
+
+tailscale_auth_key() {
+	need node "install Node.js 18 or newer"
+	[[ -n "${TAILSCALE_OAUTH_CLIENT_ID:-}" ]] || die "TAILSCALE_OAUTH_CLIENT_ID is required"
+	[[ -n "${TAILSCALE_OAUTH_CLIENT_SECRET:-}" ]] || die "TAILSCALE_OAUTH_CLIENT_SECRET is required"
+
+	TAILSCALE_OAUTH_CLIENT_ID="$TAILSCALE_OAUTH_CLIENT_ID" \
+		TAILSCALE_OAUTH_CLIENT_SECRET="$TAILSCALE_OAUTH_CLIENT_SECRET" \
+		node --input-type=module <<'NODE'
+const clientId = process.env.TAILSCALE_OAUTH_CLIENT_ID;
+const clientSecret = process.env.TAILSCALE_OAUTH_CLIENT_SECRET;
+
+const tokenResponse = await fetch("https://api.tailscale.com/api/v2/oauth/token", {
+  method: "POST",
+  headers: { "content-type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret }),
+});
+if (!tokenResponse.ok) {
+  throw new Error(`Tailscale OAuth failed with HTTP ${tokenResponse.status}`);
+}
+const { access_token: accessToken } = await tokenResponse.json();
+
+const keyResponse = await fetch("https://api.tailscale.com/api/v2/tailnet/-/keys", {
+  method: "POST",
+  headers: {
+    authorization: `Bearer ${accessToken}`,
+    "content-type": "application/json",
+  },
+  body: JSON.stringify({
+    capabilities: {
+      devices: {
+        create: {
+          reusable: false,
+          ephemeral: true,
+          preauthorized: true,
+          tags: ["tag:daytona"],
+        },
+      },
+    },
+    expirySeconds: 600,
+  }),
+});
+if (!keyResponse.ok) {
+  throw new Error(`Tailscale auth-key creation failed with HTTP ${keyResponse.status}`);
+}
+const { key } = await keyResponse.json();
+process.stdout.write(key);
+NODE
+}
+
+bootstrap_aperture() {
+	local sandbox="$1" auth_key="$2" private_key public_key encrypted_key
+	private_key="/tmp/aperture-bootstrap-key-$$.pem"
+
+	daytona exec "$sandbox" -- openssl genpkey \
+		-algorithm RSA \
+		-pkeyopt rsa_keygen_bits:2048 \
+		-out "$private_key" >/dev/null
+	public_key="$(daytona exec "$sandbox" -- openssl pkey -in "$private_key" -pubout)"
+	[[ "$public_key" == *"BEGIN PUBLIC KEY"* ]] ||
+		die "sandbox did not return an Aperture bootstrap public key"
+
+	encrypted_key="$({
+		TAILSCALE_AUTH_KEY="$auth_key" APERTURE_PUBLIC_KEY="$public_key" \
+			node --input-type=module <<'NODE'
+import { constants, publicEncrypt } from "node:crypto";
+
+const ciphertext = publicEncrypt(
+  {
+    key: process.env.APERTURE_PUBLIC_KEY,
+    padding: constants.RSA_PKCS1_OAEP_PADDING,
+  },
+  Buffer.from(process.env.TAILSCALE_AUTH_KEY),
+);
+process.stdout.write(ciphertext.toString("base64"));
+NODE
+	})"
+	[[ "$encrypted_key" =~ ^[a-zA-Z0-9+/=]+$ ]] ||
+		die "failed to encrypt the one-use Tailscale key"
+
+	if daytona exec "$sandbox" -- \
+		start-aperture-bridge-encrypted "$encrypted_key" "$private_key"; then
+		daytona exec "$sandbox" -- rm -f "$private_key" >/dev/null
+	else
+		daytona exec "$sandbox" -- rm -f "$private_key" >/dev/null 2>&1 || true
+		return 1
+	fi
 }
 
 cmd_check() {
@@ -275,6 +432,41 @@ cmd_init() {
 	note "Daytona CLI installed; next run: task remote:login"
 }
 
+cmd_secrets_init() {
+	if command -v infisical >/dev/null 2>&1; then
+		note "Infisical CLI is already installed"
+		infisical --version
+		return
+	fi
+
+	case "$(uname -s)" in
+	Darwin)
+		need brew "install Homebrew from https://brew.sh"
+		brew install infisical/get-cli/infisical
+		;;
+	Linux)
+		need npm "install Node.js and npm"
+		npm install --global @infisical/cli@0.43.114
+		;;
+	*) die "automatic Infisical CLI installation is supported on macOS and Linux" ;;
+	esac
+
+	infisical --version
+}
+
+cmd_secrets_check() {
+	need infisical "run 'task secrets:init'"
+	[[ -n "${INFISICAL_PROJECT_ID:-}" ]] || die "INFISICAL_PROJECT_ID is required"
+	local token
+	token="$(infisical_access_token)"
+	INFISICAL_TOKEN="$token" INFISICAL_DISABLE_UPDATE_CHECK=true infisical export \
+		--projectId="$INFISICAL_PROJECT_ID" \
+		--env="${INFISICAL_ENVIRONMENT:-dev}" \
+		--path="${INFISICAL_SECRET_PATH:-/}" \
+		--format=json >/dev/null
+	note "Infisical authentication and project configuration are available"
+}
+
 cmd_login() {
 	need daytona "run 'task remote:init'"
 
@@ -333,10 +525,17 @@ cmd_start() {
 	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
 	need jq "brew install jq"
 
-	local dir sandbox repo source_ref commit branch context_url clone
-	local cpu memory disk auto_stop snapshot target
+	local dir sandbox repo source_ref commit branch context_url clone config config_file
+	local build_dockerfile build_context
+	local snapshot_override
+	local cpu memory memory_gb disk auto_stop snapshot target infisical_enabled infisical_environment
+	local infisical_path infisical_token aperture_enabled aperture_host aperture_model
+	local aperture_port tailscale_key
 	dir="$(session_dir)"
 	[[ ! -e "$dir" ]] || die "session '$NAME' already exists at $dir"
+	config_file="${REMOTE_CONFIG_FILE:-$ROOT/config.yaml}"
+	[[ -f "$config_file" ]] || die "remote create config not found: $config_file"
+	config="$(node "$ROOT/scripts/read-remote-config.mjs" "$config_file")"
 
 	sandbox="$(sandbox_name_for)"
 	repo="${REMOTE_REPO:-$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)}"
@@ -345,18 +544,45 @@ cmd_start() {
 	source_ref="${REMOTE_GIT_REF:-${branch:-HEAD}}"
 	commit="$(git -C "$ROOT" rev-parse HEAD)"
 	context_url="$(github_context_url "$repo")"
-	clone="${REMOTE_CLONE:-1}"
-	cpu="${REMOTE_CPU:-2}"
-	memory="${REMOTE_MEMORY:-4096}"
-	disk="${REMOTE_DISK:-10}"
-	auto_stop="${REMOTE_AUTO_STOP:-60}"
-	snapshot="${REMOTE_SNAPSHOT:-}"
-	target="${REMOTE_TARGET:-}"
+	clone="${REMOTE_CLONE:-$(jq -r '.clone' <<<"$config")}"
+	cpu="${REMOTE_CPU:-$(jq -r '.resources.cpu' <<<"$config")}"
+	memory="${REMOTE_MEMORY:-$(jq -r '.resources.memoryMb' <<<"$config")}"
+	disk="${REMOTE_DISK:-$(jq -r '.resources.diskGb' <<<"$config")}"
+	auto_stop="${REMOTE_AUTO_STOP:-$(jq -r '.autoStopMinutes' <<<"$config")}"
+	snapshot_override="${REMOTE_SNAPSHOT:-}"
+	if [[ "$snapshot_override" == "none" || "$snapshot_override" == "null" ]]; then
+		snapshot=""
+	else
+		snapshot="${snapshot_override:-$(jq -r '.snapshot // empty' <<<"$config")}"
+	fi
+	target="${REMOTE_TARGET:-$(jq -r '.target // empty' <<<"$config")}"
+	build_dockerfile="$(jq -r '.build.dockerfile // empty' <<<"$config")"
+	build_context="$(jq -r '.build.context // empty' <<<"$config")"
+	infisical_enabled="${REMOTE_INFISICAL:-0}"
+	infisical_environment="${INFISICAL_ENVIRONMENT:-dev}"
+	infisical_path="${INFISICAL_SECRET_PATH:-/}"
+	aperture_enabled="${REMOTE_APERTURE:-0}"
+	aperture_host="${REMOTE_APERTURE_HOST:-${APERTURE_HOST:-}}"
+	aperture_model="${REMOTE_APERTURE_MODEL:-${APERTURE_MODEL:-gpt-5.5}}"
+	aperture_port="${REMOTE_APERTURE_PORT:-${APERTURE_LOCAL_PORT:-41111}}"
 
 	positive_integer "CPU" "$cpu"
 	positive_integer "MEMORY" "$memory"
+	((memory >= 1024 && memory % 1024 == 0)) || die "MEMORY must be a whole number of GiB expressed in MB"
+	memory_gb="$((memory / 1024))"
 	positive_integer "DISK" "$disk"
 	nonnegative_integer "AUTO_STOP" "$auto_stop"
+	positive_integer "APERTURE_PORT" "$aperture_port"
+	((aperture_port <= 65535)) || die "APERTURE_PORT must not exceed 65535"
+	case "$clone" in
+	1 | true) clone=1 ;;
+	0 | false) clone=0 ;;
+	*) die "CLONE must be true, false, 1, or 0" ;;
+	esac
+	case "$target" in
+	"" | eu | us) ;;
+	*) die "TARGET must be eu or us" ;;
+	esac
 
 	local -a create_args
 	create_args=(
@@ -370,17 +596,138 @@ cmd_start() {
 	if [[ -n "$snapshot" ]]; then
 		create_args+=(--snapshot "$snapshot")
 	else
-		create_args+=(--cpu "$cpu" --memory "$memory" --disk "$disk")
+		[[ -n "$build_dockerfile" ]] || die "remote.create.build.dockerfile is required without a snapshot"
+		[[ -n "$build_context" ]] || die "remote.create.build.context is required without a snapshot"
+		[[ -f "$ROOT/$build_dockerfile" ]] || die "Dockerfile not found: $build_dockerfile"
+		[[ -d "$ROOT/$build_context" ]] || die "build context not found: $build_context"
+		create_args+=(
+			--dockerfile "$ROOT/$build_dockerfile"
+			--context "$ROOT/$build_context"
+			--cpu "$cpu"
+			--memory "$memory_gb"
+			--disk "$disk"
+		)
 	fi
 	[[ -z "$target" ]] || create_args+=(--target "$target")
+	if [[ "$infisical_enabled" == "1" || "$infisical_enabled" == "true" ]]; then
+		[[ -n "${INFISICAL_PROJECT_ID:-}" ]] || die "INFISICAL_PROJECT_ID is required when Infisical is enabled"
+		[[ -n "$snapshot" ]] || die "SNAPSHOT is required when Infisical is enabled"
+		create_args+=(
+			--env "INFISICAL_PROJECT_ID=$INFISICAL_PROJECT_ID"
+			--env "INFISICAL_ENVIRONMENT=$infisical_environment"
+			--env "INFISICAL_SECRET_PATH=$infisical_path"
+			--env "INFISICAL_DISABLE_UPDATE_CHECK=true"
+		)
+		[[ -z "${INFISICAL_DOMAIN:-}" ]] || create_args+=(--env "INFISICAL_DOMAIN=$INFISICAL_DOMAIN")
+		infisical_token="$(infisical_access_token)"
+	fi
+	if [[ "$aperture_enabled" == "1" || "$aperture_enabled" == "true" ]]; then
+		[[ -n "$snapshot" ]] || die "SNAPSHOT is required when Aperture is enabled"
+		[[ "$aperture_host" =~ ^[a-zA-Z0-9.-]+$ ]] ||
+			die "APERTURE_HOST must be a DNS hostname without a scheme or path"
+		[[ "$aperture_model" =~ ^[a-zA-Z0-9._-]+$ ]] ||
+			die "APERTURE_MODEL contains unsupported characters"
+		create_args+=(
+			--env "APERTURE_HOST=$aperture_host"
+			--env "APERTURE_LOCAL_PORT=$aperture_port"
+			--env "APERTURE_BASE_URL=http://127.0.0.1:$aperture_port/codex"
+			--env "APERTURE_MODEL=$aperture_model"
+			--env "APERTURE_NODE_NAME=$sandbox"
+		)
+		tailscale_key="$(tailscale_auth_key)"
+	fi
 
 	if ! git -C "$ROOT" diff --quiet || ! git -C "$ROOT" diff --cached --quiet; then
 		note "warning: the local worktree is dirty; uncommitted files will not be cloned"
 	fi
 	note "creating Daytona sandbox '$sandbox'"
 	daytona "${create_args[@]}"
-
 	mkdir -p "$dir"
+	jq -n \
+		--arg name "$NAME" \
+		--arg sandboxName "$sandbox" \
+		--arg createdAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+		'{
+			schemaVersion: 1,
+			name: $name,
+			localState: "bootstrap-pending",
+			sandbox: { name: $sandboxName },
+			workspace: "/workspace",
+			createdAt: $createdAt,
+			updatedAt: $createdAt
+		}' >"$dir/session.json"
+	write_session_helpers "$dir" "$sandbox"
+	local sandbox_ready=0 attempt
+	for attempt in $(seq 1 30); do
+		if daytona exec "$sandbox" -- true >/dev/null 2>&1; then
+			sandbox_ready=1
+			break
+		fi
+		sleep 1
+	done
+	if [[ "$sandbox_ready" != "1" ]]; then
+		update_local_state "running-bootstrap-failed"
+		die "sandbox '$sandbox' did not become ready for command execution"
+	fi
+	daytona exec "$sandbox" -- mkdir -p /workspace
+	if daytona exec "$sandbox" -- command -v tmux >/dev/null 2>&1 &&
+		! daytona exec "$sandbox" -- tmux has-session -t dev >/dev/null 2>&1; then
+		daytona exec "$sandbox" -- tmux new-session -d -s dev -c /workspace
+	fi
+	if [[ "$infisical_enabled" == "1" || "$infisical_enabled" == "true" ]]; then
+		if ! daytona exec "$sandbox" -- \
+			"command -v infisical >/dev/null && command -v with-infisical >/dev/null"; then
+			note "snapshot does not contain infisical and with-infisical; deleting sandbox"
+			if daytona delete "$sandbox" >/dev/null 2>&1; then
+				update_local_state "deleted-bootstrap-failed"
+			else
+				update_local_state "running-bootstrap-failed"
+				note "automatic deletion failed; recover with: task remote:destroy NAME=$NAME"
+			fi
+			return 1
+		elif bootstrap_infisical "$sandbox" "$infisical_token"; then
+			note "Infisical access token installed with mode 0600"
+		else
+			note "Infisical bootstrap failed; deleting sandbox"
+			if daytona delete "$sandbox" >/dev/null 2>&1; then
+				update_local_state "deleted-bootstrap-failed"
+			else
+				update_local_state "running-bootstrap-failed"
+				note "automatic deletion failed; recover with: task remote:destroy NAME=$NAME"
+			fi
+			return 1
+		fi
+	fi
+	if [[ "$aperture_enabled" == "1" || "$aperture_enabled" == "true" ]]; then
+		if ! daytona exec "$sandbox" -- \
+			"command -v codex >/dev/null && command -v ts-unplug >/dev/null && command -v start-aperture-bridge >/dev/null"; then
+			note "snapshot does not contain Codex and the Aperture bridge; deleting sandbox"
+			if daytona delete "$sandbox" >/dev/null 2>&1; then
+				update_local_state "deleted-bootstrap-failed"
+			else
+				update_local_state "running-bootstrap-failed"
+				note "automatic deletion failed; recover with: task remote:destroy NAME=$NAME"
+			fi
+			return 1
+		elif bootstrap_aperture "$sandbox" "$tailscale_key" >"$dir/aperture-bootstrap.log" 2>&1; then
+			tailscale_key=""
+			note "ephemeral Tailscale bridge connected to Aperture"
+		else
+			tailscale_key=""
+			daytona exec "$sandbox" -- \
+				"cat \"\${APERTURE_STATE_DIR:-\${XDG_STATE_HOME:-\$HOME/.local/state}/aperture-tsnet}/ts-unplug.log\"" \
+				>>"$dir/aperture-bootstrap.log" 2>&1 || true
+			note "Aperture bootstrap failed; deleting sandbox"
+			if daytona delete "$sandbox" >/dev/null 2>&1; then
+				update_local_state "deleted-bootstrap-failed"
+			else
+				update_local_state "running-bootstrap-failed"
+				note "automatic deletion failed; recover with: task remote:destroy NAME=$NAME"
+			fi
+			return 1
+		fi
+	fi
+
 	refresh_sandbox_info "$sandbox" "$dir"
 
 	jq -n \
@@ -400,6 +747,13 @@ cmd_start() {
 		--argjson memoryMb "$memory" \
 		--argjson diskGb "$disk" \
 		--argjson autoStopMinutes "$auto_stop" \
+		--argjson infisicalEnabled "$([[ "$infisical_enabled" == "1" || "$infisical_enabled" == "true" ]] && printf true || printf false)" \
+		--arg infisicalEnvironment "$infisical_environment" \
+		--arg infisicalPath "$infisical_path" \
+		--argjson apertureEnabled "$([[ "$aperture_enabled" == "1" || "$aperture_enabled" == "true" ]] && printf true || printf false)" \
+		--arg apertureHost "$aperture_host" \
+		--arg apertureModel "$aperture_model" \
+		--argjson aperturePort "$aperture_port" \
 		--arg createdAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
 		'{
 			schemaVersion: 1,
@@ -426,6 +780,22 @@ cmd_start() {
 				diskGb: $diskGb,
 				autoStopMinutes: $autoStopMinutes
 			},
+			secrets: {
+				infisical: {
+					enabled: $infisicalEnabled,
+					environment: $infisicalEnvironment,
+					path: $infisicalPath
+				}
+			},
+			network: {
+				aperture: {
+					enabled: $apertureEnabled,
+					host: (if $apertureHost == "" then null else $apertureHost end),
+					model: $apertureModel,
+					localPort: $aperturePort,
+					ephemeral: true
+				}
+			},
 			workspace: "/workspace",
 			commands: {
 				ssh: ("task remote:ssh NAME=" + $name),
@@ -436,8 +806,6 @@ cmd_start() {
 			createdAt: $createdAt,
 			updatedAt: $createdAt
 		}' >"$dir/session.json"
-
-	write_session_helpers "$dir" "$sandbox"
 
 	if [[ "$clone" == "1" || "$clone" == "true" ]]; then
 		if [[ -z "$repo" ]]; then
@@ -503,15 +871,86 @@ cmd_info() {
 cmd_ssh() {
 	require_session
 	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
-	exec daytona ssh "$(sandbox_name_from_session)"
+	need ssh "install OpenSSH"
+	local sandbox ssh_config expires_minutes status
+	sandbox="$(sandbox_name_from_session)"
+	expires_minutes="${REMOTE_SSH_EXPIRES_MINUTES:-1440}"
+	positive_integer "EXPIRES_MINUTES" "$expires_minutes"
+
+	if ! daytona exec "$sandbox" -- command -v tmux >/dev/null 2>&1; then
+		exec daytona ssh "$sandbox" --expires "$expires_minutes"
+	fi
+
+	ssh_config="$(mktemp "${TMPDIR:-/tmp}/daytona-ssh.XXXXXX")"
+	trap 'rm -f "$ssh_config"' EXIT INT TERM
+	write_ssh_client_config "$sandbox" "$expires_minutes" "$ssh_config"
+	ssh -F "$ssh_config" -t daytona-session \
+		tmux new-session -A -s dev -c /workspace
+	status="$?"
+	rm -f "$ssh_config"
+	trap - EXIT INT TERM
+	return "$status"
 }
 
 cmd_exec() {
 	require_session
 	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
 	[[ -n "${REMOTE_COMMAND:-}" ]] || die "CMD is required"
-	exec daytona exec "$(sandbox_name_from_session)" --cwd /workspace -- \
-		"$REMOTE_COMMAND"
+	local with_secrets="${REMOTE_WITH_SECRETS:-0}" sandbox remote_command
+	sandbox="$(sandbox_name_from_session)"
+	if [[ "$with_secrets" == "1" || "$with_secrets" == "true" ]]; then
+		session_uses_infisical || die "session '$NAME' was not created with Infisical"
+		remote_command="$(join_shell_args with-infisical sh -lc "$REMOTE_COMMAND")"
+	else
+		remote_command="$(join_shell_args sh -lc "$REMOTE_COMMAND")"
+	fi
+	exec daytona exec "$sandbox" --cwd /workspace -- "$remote_command"
+}
+
+cmd_secrets_refresh() {
+	require_session
+	need daytona "run 'task remote:init'"
+	local sandbox token
+	session_uses_infisical || die "session '$NAME' was not created with Infisical"
+	sandbox="$(sandbox_name_from_session)"
+	daytona start "$sandbox" >/dev/null 2>&1 || true
+	token="$(infisical_access_token)"
+	bootstrap_infisical "$sandbox" "$token"
+	note "refreshed the Infisical access token for '$NAME'"
+}
+
+cmd_secrets_export() {
+	require_session
+	need daytona "run 'task remote:init'"
+	local sandbox workspace output_file remote_command
+	session_uses_infisical || die "session '$NAME' was not created with Infisical"
+	sandbox="$(sandbox_name_from_session)"
+	workspace="$(jq -er '.workspace' "$(session_file)")"
+	output_file="${REMOTE_ENV_FILE:-.env.local}"
+	[[ "$output_file" != /* && "$output_file" != *..* ]] ||
+		die "ENV_FILE must be a relative path without '..'"
+	remote_command="$(join_shell_args with-infisical --export "$output_file")"
+	daytona exec "$sandbox" --cwd "$workspace" -- "$remote_command"
+	note "exported Infisical secrets to $workspace/$output_file with mode 0600"
+}
+
+cmd_aperture_check() {
+	require_session
+	need daytona "run 'task remote:init'"
+	session_uses_aperture || die "session '$NAME' was not created with Aperture"
+	local sandbox port
+	sandbox="$(sandbox_name_from_session)"
+	port="$(jq -er '.network.aperture.localPort' "$(session_file)")"
+	daytona exec "$sandbox" -- curl -fsS "http://127.0.0.1:$port/v1/models" >/dev/null
+	note "Aperture bridge is available in '$NAME'"
+}
+
+cmd_codex_login() {
+	require_session
+	need daytona "run 'task remote:init'"
+	session_uses_aperture || die "session '$NAME' was not created with Aperture"
+	exec daytona exec "$(sandbox_name_from_session)" --timeout 0 -- \
+		codex login --device-auth
 }
 
 cmd_url() {
@@ -554,20 +993,28 @@ cmd_serve() {
 	need daytona "run 'task remote:init'"
 
 	local sandbox workspace port expires command log_file ready attempt
+	local with_secrets launch_command remote_command
 	sandbox="$(sandbox_name_from_session)"
 	workspace="$(jq -er '.workspace' "$(session_file)")"
 	port="${REMOTE_PORT:-5173}"
 	expires="${REMOTE_EXPIRES:-86400}"
 	command="${REMOTE_COMMAND:-pnpm exec vite dev --host 0.0.0.0 --port $port}"
+	with_secrets="${REMOTE_WITH_SECRETS:-0}"
+	if [[ "$with_secrets" == "1" || "$with_secrets" == "true" ]]; then
+		session_uses_infisical || die "session '$NAME' was not created with Infisical"
+		launch_command="$(join_shell_args with-infisical sh -lc "$command")"
+	else
+		launch_command="$(join_shell_args sh -lc "$command")"
+	fi
 	log_file="/tmp/remote-$NAME-$port.log"
+	remote_command="nohup $launch_command>$(printf '%q' "$log_file") 2>&1 &"
 	ready=0
 
 	positive_integer "PORT" "$port"
 	positive_integer "EXPIRES" "$expires"
 
 	note "starting on port $port: $command"
-	daytona exec "$sandbox" --cwd "$workspace" -- \
-		nohup "$command" '>' "$log_file" '2>&1' '&'
+	daytona exec "$sandbox" --cwd "$workspace" -- "$remote_command"
 
 	for attempt in $(seq 1 30); do
 		if daytona exec "$sandbox" -- \
@@ -596,7 +1043,8 @@ cmd_portless() {
 	need ssh "install OpenSSH"
 
 	local sandbox remote_port local_port proxy_port alias expires_minutes checksum
-	local dir metadata tunnel_log ssh_token tunnel_pid url ready attempt
+	local dir metadata metadata_temp tunnel_log tunnel_pid url ready attempt
+	local alias_registered=0 tunnel_committed=0
 	sandbox="$(sandbox_name_from_session)"
 	remote_port="${REMOTE_PORT:-5173}"
 	proxy_port="${REMOTE_PORTLESS_PROXY_PORT:-1355}"
@@ -625,7 +1073,7 @@ cmd_portless() {
 		tunnel_pid="$(jq -r '.tunnelPid // empty' "$metadata")"
 		if [[ "$tunnel_pid" =~ ^[0-9]+$ ]] &&
 			kill -0 "$tunnel_pid" 2>/dev/null &&
-			curl -fsS -o /dev/null "http://127.0.0.1:$local_port/" 2>/dev/null; then
+			curl --max-time 2 -sS -o /dev/null "http://127.0.0.1:$local_port/" 2>/dev/null; then
 			note "reusing active SSH tunnel on local port $local_port"
 			ready=1
 		fi
@@ -637,20 +1085,17 @@ cmd_portless() {
 		fi
 
 		mkdir -p "$dir"
-		ssh_token="$(create_ssh_token "$sandbox" "$expires_minutes")"
-		nohup ssh -N \
+		trap 'if [[ "${tunnel_committed:-0}" != "1" ]]; then if [[ "${alias_registered:-0}" == "1" ]]; then portless alias --remove "$alias" >/dev/null 2>&1 || true; fi; rm -f "${metadata_temp:-}"; if [[ "${tunnel_pid:-}" =~ ^[0-9]+$ ]]; then kill "$tunnel_pid" 2>/dev/null || true; wait "$tunnel_pid" 2>/dev/null || true; fi; fi' EXIT INT TERM
+		print_ssh_client_config "$sandbox" "$expires_minutes" |
+			nohup ssh -F /dev/stdin -N \
 			-o ExitOnForwardFailure=yes \
-			-o ServerAliveInterval=30 \
-			-o ServerAliveCountMax=3 \
-			-o StrictHostKeyChecking=accept-new \
 			-L "$local_port:127.0.0.1:$remote_port" \
-			"$ssh_token@ssh.app.daytona.io" \
+			daytona-session \
 			>"$tunnel_log" 2>&1 &
 		tunnel_pid="$!"
-		unset ssh_token
 
 		for attempt in $(seq 1 15); do
-			if curl -fsS -o /dev/null "http://127.0.0.1:$local_port/" 2>/dev/null; then
+			if curl --max-time 2 -sS -o /dev/null "http://127.0.0.1:$local_port/" 2>/dev/null; then
 				ready=1
 				break
 			fi
@@ -662,13 +1107,18 @@ cmd_portless() {
 
 		if [[ "$ready" != "1" ]]; then
 			note "SSH tunnel failed; see $tunnel_log"
+			kill "$tunnel_pid" 2>/dev/null || true
+			wait "$tunnel_pid" 2>/dev/null || true
+			trap - EXIT INT TERM
 			return 1
 		fi
 	fi
 
 	portless proxy start --no-tls --port "$proxy_port"
 	portless alias "$alias" "$local_port" --force
+	alias_registered=1
 	url="http://$alias.localhost:$proxy_port"
+	metadata_temp="$(mktemp "$dir/.metadata.XXXXXX")"
 
 	jq -n \
 		--arg sandbox "$sandbox" \
@@ -689,7 +1139,11 @@ cmd_portless() {
 			tunnelPid: $tunnelPid,
 			url: $url,
 			createdAt: $createdAt
-		}' >"$metadata"
+		}' >"$metadata_temp"
+	mv "$metadata_temp" "$metadata"
+	metadata_temp=""
+	tunnel_committed=1
+	trap - EXIT INT TERM
 
 	note "local tunnel $local_port -> $sandbox:$remote_port"
 	printf '%s\n' "$url"
@@ -744,6 +1198,9 @@ cmd_resume() {
 	local sandbox
 	sandbox="$(sandbox_name_from_session)"
 	daytona start "$sandbox"
+	if session_uses_aperture; then
+		daytona exec "$sandbox" -- start-aperture-bridge </dev/null
+	fi
 	update_local_state "running"
 	refresh_sandbox_info "$sandbox" "$(session_dir)"
 	note "resumed '$NAME'"
@@ -752,12 +1209,15 @@ cmd_resume() {
 cmd_destroy() {
 	require_session
 	need daytona "brew install daytonaio/cli/daytona, then run 'daytona login'"
-	local sandbox dir archive_dir
+	local sandbox dir archive_dir local_state
 	sandbox="$(sandbox_name_from_session)"
 	dir="$(session_dir)"
 	archive_dir="$SESSIONS_DIR/.archive/$NAME-$(date -u +'%Y%m%dT%H%M%SZ')"
+	local_state="$(jq -r '.localState // "unknown"' "$(session_file)")"
 
-	daytona delete "$sandbox"
+	if [[ "$local_state" != deleted-* ]]; then
+		daytona delete "$sandbox"
+	fi
 	mkdir -p "$(dirname "$archive_dir")"
 	update_local_state "deleted"
 	mv "$dir" "$archive_dir"
@@ -773,6 +1233,12 @@ Commands:
   init     Install the Daytona CLI if needed
   login    Authenticate with browser login or DAYTONA_API_KEY
   check    Verify local Daytona tooling
+  secrets-init Install the Infisical CLI if needed
+  secrets-check Verify Infisical machine identity configuration
+  secrets-refresh Refresh a sandbox's short-lived Infisical token
+  secrets-export Explicitly export sandbox secrets to .env.local
+  aperture-check Verify a sandbox's private Aperture bridge
+  codex-login Sign sandbox Codex in with ChatGPT device authentication
   snapshot Build a reusable snapshot from the local devcontainer
   start    Create a tracked sandbox
   list     List tracked sandboxes
@@ -789,10 +1255,20 @@ Commands:
 EOF
 }
 
+if [[ "${REMOTE_LIBRARY_ONLY:-0}" == "1" ]]; then
+	return 0 2>/dev/null || exit 0
+fi
+
 case "$COMMAND" in
 init) cmd_init ;;
 login) cmd_login ;;
 check) cmd_check ;;
+secrets-init) cmd_secrets_init ;;
+secrets-check) cmd_secrets_check ;;
+secrets-refresh) cmd_secrets_refresh ;;
+secrets-export) cmd_secrets_export ;;
+aperture-check) cmd_aperture_check ;;
+codex-login) cmd_codex_login ;;
 snapshot) cmd_snapshot ;;
 start) cmd_start ;;
 list) cmd_list ;;
