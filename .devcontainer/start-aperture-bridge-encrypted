@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+encrypted_key="${1:-}"
+private_key="${2:-}"
+
+case "$encrypted_key" in
+"" | *[!a-zA-Z0-9+/=]*)
+	printf 'start-aperture-bridge-encrypted: invalid ciphertext\n' >&2
+	exit 1
+	;;
+esac
+case "$private_key" in
+/tmp/aperture-bootstrap-key-*.pem) ;;
+*)
+	printf 'start-aperture-bridge-encrypted: invalid private-key path\n' >&2
+	exit 1
+	;;
+esac
+[ -r "$private_key" ] || {
+	printf 'start-aperture-bridge-encrypted: private key is not readable\n' >&2
+	exit 1
+}
+
+trap 'rm -f "$private_key"' EXIT
+printf '%s' "$encrypted_key" |
+	base64 -d |
+	openssl pkeyutl -decrypt \
+		-inkey "$private_key" \
+		-pkeyopt rsa_padding_mode:oaep |
+	start-aperture-bridge

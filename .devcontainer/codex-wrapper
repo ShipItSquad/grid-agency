@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+
+real_codex=/usr/local/bin/codex-real
+
+if [ -z "${APERTURE_BASE_URL:-}" ]; then
+	exec "$real_codex" "$@"
+fi
+
+case "$APERTURE_BASE_URL" in
+http://127.0.0.1:*/codex)
+	base_port="${APERTURE_BASE_URL#http://127.0.0.1:}"
+	;;
+http://localhost:*/codex)
+	base_port="${APERTURE_BASE_URL#http://localhost:}"
+	;;
+*)
+	printf 'codex: APERTURE_BASE_URL must be a localhost HTTP URL ending in /codex\n' >&2
+	exit 1
+	;;
+esac
+base_port="${base_port%/codex}"
+case "$base_port" in
+"" | 0 | *[!0-9]*)
+	printf 'codex: APERTURE_BASE_URL must contain a positive integer port\n' >&2
+	exit 1
+	;;
+esac
+
+model="${APERTURE_MODEL:-gpt-5.5}"
+case "$model" in
+"" | *[!a-zA-Z0-9._-]*)
+	printf 'codex: APERTURE_MODEL contains unsupported characters\n' >&2
+	exit 1
+	;;
+esac
+
+exec "$real_codex" \
+	-c "model=\"$model\"" \
+	-c 'model_provider="aperture"' \
+	-c 'model_providers.aperture.name="Aperture"' \
+	-c "model_providers.aperture.base_url=\"$APERTURE_BASE_URL\"" \
+	-c 'model_providers.aperture.wire_api="responses"' \
+	-c 'model_providers.aperture.requires_openai_auth=true' \
+	"$@"

@@ -1,0 +1,15 @@
+remote:
+  create:
+    # Prepared snapshots keep sandbox startup fast. Set this to null to build
+    # the configured Dockerfile with the resources below.
+    snapshot: ci-cd-dev-v2
+    build:
+      dockerfile: .devcontainer/Dockerfile
+      context: .devcontainer
+    target: eu
+    clone: true
+    autoStopMinutes: 60
+    resources:
+      cpu: 2
+      memoryMb: 4096
+      diskGb: 10

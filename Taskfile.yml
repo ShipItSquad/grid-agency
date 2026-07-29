@@ -16,7 +16,18 @@ tasks:
     cmds:
       - ./scripts/remote check
 
-  remote:start:
+  secrets:init:
+    desc: Install the Infisical CLI when it is not already available
+    cmds:
+      - ./scripts/remote secrets-init
+
+  secrets:check:
+    desc: Verify Infisical machine identity credentials and project configuration
+    cmds:
+      - ./scripts/remote secrets-check
+
+  remote:create:
+    aliases: [remote:start]
     desc: Create a remote workspace (NAME=01 CONTEXT=pr:123)
     requires:
       vars: [NAME]
@@ -33,6 +44,12 @@ tasks:
       REMOTE_DISK: "{{.DISK}}"
       REMOTE_AUTO_STOP: "{{.AUTO_STOP}}"
       REMOTE_CLONE: "{{.CLONE}}"
+      REMOTE_INFISICAL: "{{.INFISICAL}}"
+      REMOTE_APERTURE: "{{.APERTURE}}"
+      REMOTE_APERTURE_HOST: "{{.APERTURE_HOST}}"
+      REMOTE_APERTURE_MODEL: "{{.APERTURE_MODEL}}"
+      REMOTE_APERTURE_PORT: "{{.APERTURE_PORT}}"
+      REMOTE_CONFIG_FILE: "{{.CONFIG}}"
     cmds:
       - ./scripts/remote start
 
@@ -79,8 +96,46 @@ tasks:
     env:
       REMOTE_NAME: "{{.NAME}}"
       REMOTE_COMMAND: "{{.CMD}}"
+      REMOTE_WITH_SECRETS: "{{.SECRETS}}"
     cmds:
       - ./scripts/remote exec
+
+  remote:secrets:refresh:
+    desc: Refresh the short-lived Infisical token in a remote workspace (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: "{{.NAME}}"
+    cmds:
+      - ./scripts/remote secrets-refresh
+
+  remote:secrets:export:
+    desc: Explicitly export Infisical secrets to a protected env file (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: "{{.NAME}}"
+      REMOTE_ENV_FILE: '{{default ".env.local" .ENV_FILE}}'
+    cmds:
+      - ./scripts/remote secrets-export
+
+  remote:aperture:check:
+    desc: Verify a sandbox's private Aperture bridge (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: "{{.NAME}}"
+    cmds:
+      - ./scripts/remote aperture-check
+
+  remote:codex:login:
+    desc: Sign sandbox Codex in with ChatGPT device authentication (NAME=01)
+    requires:
+      vars: [NAME]
+    env:
+      REMOTE_NAME: "{{.NAME}}"
+    cmds:
+      - ./scripts/remote codex-login
 
   remote:serve:
     desc: Start a background dev server and print its Daytona URL (NAME=01 PORT=5173)
@@ -91,6 +146,7 @@ tasks:
       REMOTE_PORT: "{{.PORT}}"
       REMOTE_COMMAND: "{{.CMD}}"
       REMOTE_EXPIRES: "{{.EXPIRES}}"
+      REMOTE_WITH_SECRETS: "{{.SECRETS}}"
     cmds:
       - ./scripts/remote serve
 

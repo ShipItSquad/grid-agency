@@ -4,24 +4,26 @@ Remote sessions are generic workspaces. A session can be associated with an issu
 
 `NAME` is the short local handle. `CONTEXT` is optional metadata describing what the workspace is for.
 
+Shared creation defaults live in [`config.yaml`](../config.yaml) under `remote.create`. The configuration controls the snapshot, target region, repository cloning, auto-stop interval, CPU, memory, and disk used by `remote:create`; `remote:start` is retained as an alias. Explicit Task values such as `CPU=4` or `MEMORY=8192` override the shared configuration for one sandbox.
+
 ```sh
 # One-off work from the current branch
-task remote:start NAME=01 PURPOSE="investigate the flaky browser test"
+task remote:create NAME=01 PURPOSE="investigate the flaky browser test"
 
 # GitHub issue: creates remote/issue-123
-task remote:start NAME=02 CONTEXT=issue:123
+task remote:create NAME=02 CONTEXT=issue:123
 
 # GitHub pull request: fetches refs/pull/456/head into remote/pr-456
-task remote:start NAME=review-auth CONTEXT=pr:456
+task remote:create NAME=review-auth CONTEXT=pr:456
 
 # Existing branch
-task remote:start NAME=redesign CONTEXT=branch:feat/redesign
+task remote:create NAME=redesign CONTEXT=branch:feat/redesign
 ```
 
 By default a session receives 2 vCPUs, 4096 MB RAM, 10 GB disk, and stops after 60 inactive minutes. Override those values when needed:
 
 ```sh
-task remote:start \
+task remote:create \
 	NAME=large-build \
 	CONTEXT=issue:789 \
 	CPU=4 \
@@ -40,9 +42,17 @@ task remote:start NAME=01 SNAPSHOT=off-grid-dev
 
 `remote:snapshot` builds from `.devcontainer/Dockerfile` with `.devcontainer` as its build context. The snapshot build resource flags use GiB, so `CPU=2 MEMORY=4 DISK=10` are the defaults. The session creation command uses Daytona's required MB unit for memory, so its equivalent override is `MEMORY=4096`.
 
-Snapshots already contain their CPU, memory, and disk allocation. When `SNAPSHOT` is provided, `remote:start` uses those snapshot allocations and ignores session-level `CPU`, `MEMORY`, and `DISK` values.
+Snapshots already contain their CPU, memory, and disk allocation. When `snapshot` is configured, Daytona uses those snapshot allocations and ignores `resources` and session-level `CPU`, `MEMORY`, and `DISK` values. Set `remote.create.snapshot` to `null` to make the shared resources apply; Daytona then builds the configured `remote.create.build.dockerfile` and `build.context` for the new sandbox.
 
-The repository is cloned into `/workspace`. Set `CLONE=0` to create an empty sandbox, `REPO` to override the origin URL, or `GIT_REF` to choose the base commit/branch:
+For a one-off dynamically built sandbox without the configured snapshot, use `SNAPSHOT=none`; resource overrides then apply:
+
+```sh
+task remote:create NAME=large-build SNAPSHOT=none CPU=4 MEMORY=8192 DISK=10
+```
+
+Prepared snapshots include tmux. `remote:start` creates the `dev` session in `/workspace`, and `remote:ssh` creates a fresh Daytona SSH token and attaches to that session automatically. Detach normally to leave terminals and development processes running for the next SSH connection.
+
+The repository is cloned into `/workspace`. Set `CLONE=0` to create an empty `/workspace`, `REPO` to override the origin URL, or `GIT_REF` to choose the base commit/branch:
 
 ```sh
 task remote:start NAME=blank CLONE=0
@@ -51,6 +61,8 @@ task remote:start NAME=release GIT_REF=release
 
 Private repositories must be accessible from inside Daytona. Configure short-lived repository credentials in Daytona; do not put tokens in `REPO`, `Taskfile.yml`, or `.sessions`.
 
+Infisical can inject project secrets into sandbox commands without copying `.env.local`. See [`docs/secrets.md`](./secrets.md) for machine identity setup, secret-enabled session creation, token refresh, and the explicit dotenv export command.
+
 ## Daily commands
 
 ```sh
@@ -58,6 +70,8 @@ task remote:list
 task remote:info NAME=01
 task remote:ssh NAME=01
 task remote:exec NAME=01 CMD="pnpm install && pnpm check"
+task remote:secrets:refresh NAME=01
+task remote:secrets:export NAME=01
 task remote:serve NAME=01 PORT=5173
 task remote:url NAME=01 PORT=4723
 task remote:stop NAME=01
@@ -114,7 +128,7 @@ Each workspace gets a local directory:
     └── 5173.url       # URL-only convenience file
 ```
 
-SSH tokens are intentionally not stored. `task remote:ssh` or `.sessions/01/ssh` asks Daytona for a fresh token on each connection.
+SSH tokens are intentionally not stored. `task remote:ssh` or `.sessions/01/ssh` asks Daytona for a fresh token on each connection and attaches to the persistent `dev` tmux session when tmux is available in the snapshot.
 
 ## Setup
 

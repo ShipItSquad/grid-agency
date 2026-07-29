@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+token_file="${INFISICAL_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/infisical/access-token}"
+
+if [ -z "${INFISICAL_TOKEN:-}" ]; then
+	if [ ! -r "$token_file" ]; then
+		printf 'with-infisical: no access token; run task remote:secrets:refresh NAME=<name>\n' >&2
+		exit 1
+	fi
+	INFISICAL_TOKEN="$(cat "$token_file")"
+	export INFISICAL_TOKEN
+fi
+
+if [ -z "${INFISICAL_PROJECT_ID:-}" ]; then
+	printf 'with-infisical: INFISICAL_PROJECT_ID is required\n' >&2
+	exit 1
+fi
+
+environment="${INFISICAL_ENVIRONMENT:-dev}"
+secret_path="${INFISICAL_SECRET_PATH:-/}"
+export INFISICAL_DISABLE_UPDATE_CHECK="${INFISICAL_DISABLE_UPDATE_CHECK:-true}"
+
+if [ "${1:-}" = "--export" ]; then
+	output_file="${2:-.env.local}"
+	umask 077
+	infisical export \
+		--projectId="$INFISICAL_PROJECT_ID" \
+		--env="$environment" \
+		--path="$secret_path" \
+		--format=dotenv \
+		--output-file="$output_file"
+	chmod 600 "$output_file"
+	exit
+fi
+
+if [ "$#" -eq 0 ]; then
+	printf 'Usage: with-infisical <command> [args...]\n' >&2
+	exit 1
+fi
+
+exec infisical run \
+	--projectId="$INFISICAL_PROJECT_ID" \
+	--env="$environment" \
+	--path="$secret_path" \
+	-- env -u INFISICAL_TOKEN "$@"
